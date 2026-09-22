@@ -1,0 +1,9 @@
+node_modules/
+dist/
+public/ocr/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
