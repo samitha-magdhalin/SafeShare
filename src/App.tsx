@@ -4,12 +4,14 @@ import { scan, ScanError, logDevelopmentScanError } from './detection/scan';
 import { riskLevel } from './detection/detect';
 import { selectProtectable, verifyImage } from './verification/verify';
 import { loadImage, protect } from './utils/image';
+import { useObjectUrlCleanup } from './utils/useObjectUrlCleanup';
 
 type Stage='empty'|'loaded'|'scanning'|'review'|'protecting'|'verified';
 export default function App(){
   const [stage,setStage]=useState<Stage>('empty'),[file,setFile]=useState<File|null>(null),[originalUrl,setOriginalUrl]=useState(''),[outputUrl,setOutputUrl]=useState(''),[outputBlob,setOutputBlob]=useState<Blob|null>(null),[findings,setFindings]=useState<Finding[]>([]),[verification,setVerification]=useState<{finding:Finding;passed:boolean}[]>([]),[progress,setProgress]=useState(''),[error,setError]=useState(''),[focused,setFocused]=useState(''),[imageSize,setImageSize]=useState({width:1,height:1}),[privacy,setPrivacy]=useState(location.pathname==='/privacy'),[originalFindings,setOriginalFindings]=useState<Finding[]>([]),[remaining,setRemaining]=useState<Finding[]>([]),[reviewCount,setReviewCount]=useState(0),[ready,setReady]=useState(false);
   const input=useRef<HTMLInputElement>(null), cardRefs=useRef<Record<string,HTMLElement|null>>({});
-  useEffect(()=>()=>{if(originalUrl)URL.revokeObjectURL(originalUrl);if(outputUrl)URL.revokeObjectURL(outputUrl)},[originalUrl,outputUrl]);
+  useObjectUrlCleanup(originalUrl);
+  useObjectUrlCleanup(outputUrl);
   function reset(){setStage('empty');setFile(null);setOriginalUrl('');setOutputUrl('');setOutputBlob(null);setFindings([]);setOriginalFindings([]);setRemaining([]);setReviewCount(0);setReady(false);setVerification([]);setProgress('');setError('');setFocused('');if(input.current)input.current.value='';}
   function navigate(path:string){history.pushState({},'',path);setPrivacy(path==='/privacy');window.scrollTo(0,0);}
   useEffect(()=>{const onPop=()=>setPrivacy(location.pathname==='/privacy');window.addEventListener('popstate',onPop);return()=>window.removeEventListener('popstate',onPop)},[]);
