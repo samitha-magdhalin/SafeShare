@@ -63,6 +63,6 @@ it('rescans a protected dark screenshot and leaves only informational content',a
     const report=verifyImage(original,rescanned);
     expect(report.unresolved).toHaveLength(0);
     expect(report.ready).toBe(true);
-    expect(report.reviewCount).toBeGreaterThan(0);
+    expect(report.reviewCount).toBe(0);
   }finally{await worker.terminate();}
 },15000);

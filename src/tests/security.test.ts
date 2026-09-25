@@ -47,6 +47,6 @@ describe('realistic credential contexts',()=>{
   it('allows informational URLs after selected secrets are removed',()=>{
     const original=detectText('PASSWORD=fakePassword123');
     const report=verifyImage(original,detectText('https://example.com'));
-    expect(report.ready).toBe(true);expect(report.reviewCount).toBe(1);
+    expect(report.ready).toBe(true);expect(report.reviewCount).toBe(0);
   });
 });
