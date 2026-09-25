@@ -1,0 +1,9 @@
+export type ReportCount={label:string;count:number};
+export type ActionCounts={BLOCK:number;PROTECT:number;WARN:number;ALLOW:number};
+export type VerificationState='Not run'|'Passed'|'Failed'|'Stale';
+export type ReviewState='Not available'|'Awaiting review'|'Approved';
+export type ReportInfo={reportId:string;generated:string;profile:string;workflowStatus:string;findings:ReportCount[];actions:ActionCounts;selectedForProtection:number;verifiedRemoved:number;verification:VerificationState;remaining:ActionCounts;review:ReviewState};
+export type SinglePrivacyReport={kind:'single';title:'SafeShare Privacy Check Report';info:ReportInfo};
+export type BatchReportRow={item:string;findings:number;actions:ActionCounts;verification:VerificationState;review:ReviewState;status:string};
+export type BatchPrivacyReport={kind:'batch';title:'SafeShare Batch Privacy Check Report';reportId:string;generated:string;profile:string;workflowStatus:string;findings:ReportCount[];actions:ActionCounts;processed:number;approved:number;awaitingReview:number;needsAttention:number;verificationPassed:number;verificationNeedsAttention:number;rows:BatchReportRow[]};
+export type PrivacyReportData=SinglePrivacyReport|BatchPrivacyReport;

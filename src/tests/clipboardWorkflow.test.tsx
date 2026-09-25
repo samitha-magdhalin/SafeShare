@@ -93,6 +93,7 @@ describe('clipboard image workflow', () => {
     expect((controls.scan.mock.calls[0][0] as File).name).toBe('pasted-screenshot.png');
   });
 
+  it('downloads a current single privacy report and revokes the previous report URL on replacement',async()=>{controls.scan.mockResolvedValueOnce({findings:[sensitive],textFindings:[sensitive],metadataCount:0});const downloads:string[]=[];vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){downloads.push(this.download);});const {container}=await mount();await paste(new File(['image'],'report.png',{type:'image/png'}));await click(container,'Scan image');await click(container,'Download Privacy Report');await click(container,'Download Privacy Report');expect(downloads).toEqual(['safeshare-privacy-report.pdf','safeshare-privacy-report.pdf']);expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:https://example.test/2');expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:https://example.test/3');});
   it('ignores ordinary text and paste events in text fields without replacing the image', async () => {
     const { container } = await mount();
     await paste(new File(['first'], 'first.png', { type: 'image/png' }));

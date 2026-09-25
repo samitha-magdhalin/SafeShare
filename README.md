@@ -76,3 +76,22 @@ React, TypeScript, Vite, Tesseract.js (Apache 2.0), jsQR (Apache 2.0), and exifr
 4. Confirm **Download Ready Images** includes only currently verified and approved protected outputs.
 5. Switch to **Public Documentation**. Confirm previous approvals and download eligibility are invalidated and B's internal URL becomes PROTECT.
 6. Re-protect, freshly verify, review, and approve. Confirm only the current approved verified outputs can be downloaded.
+
+
+## Privacy Check Report manual test
+
+### Single report
+
+1. Scan a synthetic image containing `API_KEY=sk_test_safeshare_8H2K9M4P7Q` and `CUSTOMER_EMAIL=ananya.demo@example.com`.
+2. Protect, verify, review, and approve it.
+3. Select **Download Privacy Report** and open `safeshare-privacy-report.pdf`.
+4. Confirm the report shows SafeShare branding, Client Sharing, API Key and Email counts, Verification Passed, and Review Approved.
+5. Search the PDF for `sk_test_safeshare_8H2K9M4P7Q` and `ananya.demo@example.com`. Neither value may appear.
+
+### Batch report
+
+1. Add three synthetic screenshots and scan them, leaving the batch in mixed Ready, Awaiting review, and Needs attention states.
+2. Select **Download Batch Privacy Report**. Confirm the aggregates and Screenshot 01/02/03 rows match the current states and contain no original filenames or detected values.
+3. Finish protection and approval, generate another report, and confirm the updated state is reflected.
+4. Change the Sharing Profile and generate the report again. Confirm it uses the current profile and does not preserve stale Passed or Approved authorization.
+5. Confirm report generation produces no user-content network requests in DevTools.
