@@ -95,3 +95,32 @@ React, TypeScript, Vite, Tesseract.js (Apache 2.0), jsQR (Apache 2.0), and exifr
 3. Finish protection and approval, generate another report, and confirm the updated state is reflected.
 4. Change the Sharing Profile and generate the report again. Confirm it uses the current profile and does not preserve stale Passed or Approved authorization.
 5. Confirm report generation produces no user-content network requests in DevTools.
+
+
+## Fast workflow manual test
+
+### Test A ? sensitive screenshot
+
+1. Paste a synthetic screenshot containing `API_KEY=sk_test_safeshare_8H2K9M4P7Q` and `CUSTOMER_EMAIL=ananya.demo@example.com`.
+2. Confirm scanning starts automatically and Client Sharing is applied.
+3. Select **Protect & Verify** and confirm a fresh verification scan completes.
+4. Review Original and Protected, confirm the fake values were removed, then select **Approve & Copy**.
+5. Paste into Paint and confirm the clipboard image is the reviewed protected output.
+
+### Test B ? clean screenshot
+
+1. Paste an image containing `SafeShare Demo`, ordinary documentation text, and `https://example.com`.
+2. Confirm scanning starts automatically and reports **No sensitive findings requiring protection**.
+3. Confirm no unnecessary Protect step appears and the UI does not claim the image is verified safe.
+
+### Test C ? remembered profile
+
+1. Select **Bug Report / QA**, then select **Check Another Screenshot** and paste another image.
+2. Confirm Bug Report / QA remains selected.
+3. Reload the app and confirm Bug Report / QA is restored.
+
+### Test D ? stale authorization
+
+1. Process a sensitive image through Protect, fresh verification, Before/After review, and Approve & Copy.
+2. Change the Sharing Profile.
+3. Confirm the old protected output, verification, approval, Ready state, and copy authorization are invalidated.

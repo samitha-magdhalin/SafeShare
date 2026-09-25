@@ -1,6 +1,7 @@
 import { POLICY_ACTIONS, POLICY_CATEGORIES, type Policy, type ProfileDefinition, type ProfileId } from './types';
 
 export const DEFAULT_PROFILE_ID:ProfileId='client';
+export const DEFAULT_PROFILE_STORAGE_KEY='safeshare.defaultProfile.v1';
 export const CUSTOM_POLICY_STORAGE_KEY='safeshare.customPolicy.v1';
 export const DEFAULT_CUSTOM_POLICY:Policy={credentials:'BLOCK',email:'PROTECT',phone:'PROTECT',internalIp:'WARN',internalUrl:'WARN',publicUrl:'ALLOW',qr:'WARN',metadata:'WARN'};
 
@@ -26,4 +27,13 @@ export function loadCustomPolicy(storage:Pick<Storage,'getItem'>|undefined=typeo
 export function saveCustomPolicy(policy:Policy,storage:Pick<Storage,'setItem'>|undefined=typeof localStorage==='undefined'?undefined:localStorage):void{
   if(!storage||!isPolicy(policy))return;
   try{storage.setItem(CUSTOM_POLICY_STORAGE_KEY,JSON.stringify(policy));}catch{/* Policy persistence is optional. */}
+}
+
+export function loadPreferredProfile(storage:Pick<Storage,'getItem'>|undefined=typeof localStorage==='undefined'?undefined:localStorage):ProfileId{
+  if(!storage)return DEFAULT_PROFILE_ID;
+  try{const value=storage.getItem(DEFAULT_PROFILE_STORAGE_KEY);return PROFILE_OPTIONS.some(profile=>profile.id===value)?value as ProfileId:DEFAULT_PROFILE_ID;}catch{return DEFAULT_PROFILE_ID;}
+}
+export function savePreferredProfile(profileId:ProfileId,storage:Pick<Storage,'setItem'>|undefined=typeof localStorage==='undefined'?undefined:localStorage):void{
+  if(!storage||!PROFILE_OPTIONS.some(profile=>profile.id===profileId))return;
+  try{storage.setItem(DEFAULT_PROFILE_STORAGE_KEY,profileId);}catch{/* Profile preference is optional. */}
 }

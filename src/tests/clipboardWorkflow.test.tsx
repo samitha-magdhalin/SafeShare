@@ -59,9 +59,8 @@ async function click(container: HTMLElement, label: string) {
 }
 async function readyWorkflow(container: HTMLElement) {
   await paste(new File(['original'], 'clipboard.png', { type: 'image/png' }));
-  await click(container, 'Scan image');
-  await click(container, 'Protect & verify');
-  if (!button(container, 'Approve for Sharing')?.disabled) await click(container, 'Approve for Sharing');
+    await click(container, 'Protect & Verify');
+  if (!button(container, 'Approve & Copy')?.disabled) await click(container, 'Approve & Copy');
 }
 
 describe('clipboard image workflow', () => {
@@ -87,13 +86,12 @@ describe('clipboard image workflow', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(container.querySelector('img')?.src).toBe('blob:https://example.test/1');
     expect(container.textContent).toContain('pasted-screenshot.png');
-    await click(container, 'Scan image');
-    expect(controls.scan).toHaveBeenCalledOnce();
+        expect(controls.scan).toHaveBeenCalledOnce();
     expect(controls.scan.mock.calls[0][0]).toBeInstanceOf(File);
     expect((controls.scan.mock.calls[0][0] as File).name).toBe('pasted-screenshot.png');
   });
 
-  it('downloads a current single privacy report and revokes the previous report URL on replacement',async()=>{controls.scan.mockResolvedValueOnce({findings:[sensitive],textFindings:[sensitive],metadataCount:0});const downloads:string[]=[];vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){downloads.push(this.download);});const {container}=await mount();await paste(new File(['image'],'report.png',{type:'image/png'}));await click(container,'Scan image');await click(container,'Download Privacy Report');await click(container,'Download Privacy Report');expect(downloads).toEqual(['safeshare-privacy-report.pdf','safeshare-privacy-report.pdf']);expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:https://example.test/2');expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:https://example.test/3');});
+  it('downloads a current single privacy report and revokes the previous report URL on replacement',async()=>{controls.scan.mockResolvedValueOnce({findings:[sensitive],textFindings:[sensitive],metadataCount:0});const downloads:string[]=[];vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){downloads.push(this.download);});const {container}=await mount();await paste(new File(['image'],'report.png',{type:'image/png'}));await click(container,'Download Privacy Report');await click(container,'Download Privacy Report');expect(downloads).toEqual(['safeshare-privacy-report.pdf','safeshare-privacy-report.pdf']);expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:https://example.test/2');expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:https://example.test/3');});
   it('ignores ordinary text and paste events in text fields without replacing the image', async () => {
     const { container } = await mount();
     await paste(new File(['first'], 'first.png', { type: 'image/png' }));
@@ -112,10 +110,9 @@ describe('clipboard image workflow', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     const { container } = await mount();
     await readyWorkflow(container);
-    await click(container, 'Copy Safe Image');
-    expect(container.textContent).toContain('Copied');
+    expect(container.textContent).toContain('Copied to clipboard');
     await paste(new File(['replacement'], 'replacement.png', { type: 'image/png' }));
-    expect(container.textContent).toContain('Image ready to scan.');
+    expect(container.textContent).toContain('Privacy Scan Results');
     expect(container.textContent).not.toContain('Ready to Share');
     expect(container.textContent).not.toContain('Copied');
     expect(button(container, 'Copy Safe Image')).toBeUndefined();
@@ -124,14 +121,12 @@ describe('clipboard image workflow', () => {
 
   it('does not apply stale scan results after a new image is pasted', async () => {
     let finishScan!: (value: { findings: Finding[]; textFindings: Finding[]; metadataCount: number }) => void;
-    controls.scan.mockImplementationOnce(() => new Promise(resolve => { finishScan = resolve; }));
+    controls.scan.mockImplementationOnce(() => new Promise(resolve => { finishScan = resolve; })).mockResolvedValueOnce({findings:[],textFindings:[],metadataCount:0});
     const { container } = await mount();
     await paste(new File(['first'], 'first.png', { type: 'image/png' }));
-    await click(container, 'Scan image');
-    await paste(new File(['second'], 'second.png', { type: 'image/png' }));
+        await paste(new File(['second'], 'second.png', { type: 'image/png' }));
     await act(async () => finishScan({ findings: [sensitive], textFindings: [sensitive], metadataCount: 0 }));
-    expect(container.textContent).toContain('Image ready to scan.');
-    expect(container.textContent).not.toContain('Privacy Scan Results');
+    expect(container.textContent).toContain('No sensitive findings requiring protection');
     expect(container.textContent).not.toContain('Password');
   });
   it('only exposes copy after successful verification and copies the protected PNG', async () => {
@@ -141,9 +136,8 @@ describe('clipboard image workflow', () => {
     const { container } = await mount();
     await paste(new File(['unsafe-original'], 'original.png', { type: 'image/png' }));
     expect(button(container, 'Copy Safe Image')).toBeUndefined();
-    await click(container, 'Scan image');
-    expect(button(container, 'Copy Safe Image')).toBeUndefined();
-    await click(container, 'Protect & verify');
+        expect(button(container, 'Copy Safe Image')).toBeUndefined();
+    await click(container, 'Protect & Verify');
     const copy = button(container, 'Copy Safe Image');
     const exportButton = button(container, 'Export protected image');
     expect(copy).toBeDefined();
@@ -151,10 +145,9 @@ describe('clipboard image workflow', () => {
     expect(container.textContent).toContain('Awaiting review');
     expect(copy?.disabled).toBe(true);
     expect(exportButton?.disabled).toBe(true);
-    await click(container, 'Approve for Sharing');
+    await click(container, 'Approve & Copy');
     expect(container.textContent).toContain('Ready to Share');
     expect(copy?.disabled).toBe(false);
-    await click(container, 'Copy Safe Image');
     expect(write).toHaveBeenCalledOnce();
     const item = write.mock.calls[0][0][0] as TestClipboardItem;
     expect(item.data['image/png']).toBe(controls.protectedBlob);

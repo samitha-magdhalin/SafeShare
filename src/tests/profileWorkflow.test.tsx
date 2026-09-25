@@ -29,7 +29,7 @@ describe('sharing profile workflow',()=>{
     controls.scan.mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0});
     const container=await mount();
     expect(button(container,'Client Sharing')?.getAttribute('aria-pressed')).toBe('true');
-    await paste();await click(container,'Scan image');
+    await paste();
     expect(container.textContent).toContain('Policy: PROTECT');
     expect(controls.scan).toHaveBeenCalledOnce();
     await click(container,'Bug Report / QA');
@@ -43,26 +43,26 @@ describe('sharing profile workflow',()=>{
   });
 
   it('allows QA WARN findings with a visible review recommendation',async()=>{
-    controls.scan.mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0}).mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0});
+    controls.scan.mockResolvedValueOnce({findings:[password,internalUrl],textFindings:[password,internalUrl],metadataCount:0}).mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0});
     const container=await mount();
-    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');await click(container,'Approve for Sharing');
+    await click(container,'Bug Report / QA');await paste();await click(container,'Protect & Verify');await click(container,'Approve & Copy');
     expect(container.textContent).toContain('Ready to Share \u2014 review recommended');
     expect(container.textContent).toContain('1 policy warning remains');
-    expect(button(container,'Copy Safe Image')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
+    expect(button(container,'Copy Again')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
   });
 
   it('invalidates successful verification and Copy/Export after switching profiles',async()=>{
     controls.scan.mockResolvedValueOnce({findings:[password],textFindings:[password],metadataCount:0}).mockResolvedValueOnce({findings:[],textFindings:[],metadataCount:0}).mockResolvedValueOnce({findings:[],textFindings:[],metadataCount:0});
     const container=await mount();
-    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');await click(container,'Approve for Sharing');
+    await click(container,'Bug Report / QA');await paste();await click(container,'Protect & Verify');await click(container,'Approve & Copy');
     expect(container.textContent).toContain('Ready to Share');
-    expect(button(container,'Copy Safe Image')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
+    expect(button(container,'Copy Again')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
     await click(container,'Public Documentation');
     expect(container.textContent).toContain('Privacy Scan Results');
     expect(container.textContent).not.toContain('Ready to Share');
     expect(button(container,'Copy Safe Image')).toBeUndefined();expect(button(container,'Export protected image')).toBeUndefined();
     expect(controls.scan).toHaveBeenCalledTimes(2);
-    await click(container,'Protect & verify');await click(container,'Approve for Sharing');
+    await click(container,'Protect & Verify');await click(container,'Approve & Copy');
     expect(container.textContent).toContain('Ready to Share');expect(controls.scan).toHaveBeenCalledTimes(3);
   });
 });

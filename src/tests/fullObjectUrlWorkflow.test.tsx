@@ -8,7 +8,7 @@ vi.mock('../utils/image', () => ({
   protect: vi.fn(async () => new Blob(['protected'], { type: 'image/png' })),
 }));
 vi.mock('../detection/scan', () => ({
-  scan: vi.fn(async () => ({ findings: [], textFindings: [], metadataCount: 0 })),
+  scan: vi.fn().mockResolvedValueOnce({ findings: [{id:'password',type:'Password',category:'secret',severity:'CRITICAL',confidence:99,maskedPreview:'P...',source:'ocr',description:'credential',selected:true,box:{x:1,y:1,width:10,height:10}}], textFindings: [], metadataCount: 0 }).mockResolvedValue({ findings: [], textFindings: [], metadataCount: 0 }),
   logDevelopmentScanError: vi.fn(),
   ScanError: class ScanError extends Error {},
 }));
@@ -74,15 +74,13 @@ describe('complete image URL workflow in StrictMode', () => {
       const original = container.querySelector('img')?.src;
       expect(original).toBe('blob:https://example.test/1');
       expect(active.has(original!)).toBe(true);
-      await click('Scan image');
-      await click('Protect all');
-      await click('Protect & verify');
+      await click('Protect & Verify');
       const protectedUrl = container.querySelector('img')?.src;
       expect(protectedUrl).toBe('blob:https://example.test/2');
       expect(active.has(protectedUrl!)).toBe(true);
       expect(active.has(original!)).toBe(true);
       expect(container.textContent).toContain('Awaiting review');
-      await click('Approve for Sharing');
+      await click('Approve & Copy');
       expect(container.textContent).toContain('Ready to Share');
       await click('Export protected image');
       expect(download).toHaveBeenCalledOnce();
