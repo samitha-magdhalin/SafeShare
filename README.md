@@ -44,3 +44,14 @@ The user reported that the earlier basic fixture completed Scan → Protect → 
 ## Dependencies
 
 React, TypeScript, Vite, Tesseract.js (Apache 2.0), jsQR (Apache 2.0), and exifr (MIT). OCR data derives from Tesseract trained data; see package licenses.
+
+## Batch security test
+
+1. Open **Batch Screenshots** and select **Bug Report / QA**.
+2. Add at least three synthetic screenshots: A with a fake API key and email, B with only an internal URL, and C with clean public content.
+3. Select **Scan All**. Confirm A reports a credential as BLOCK and email as PROTECT, B reports the internal URL as WARN, and C has no blocking finding.
+4. Select **Protect Required**. Confirm each processed image receives its own fresh verification result and only successful items become Ready.
+5. Switch the profile to **Public Documentation**. Confirm B's internal URL changes from WARN to PROTECT, every prior Ready output is invalidated, and **Download Ready Images** no longer authorizes those stale outputs.
+6. Select **Protect Required** again. Confirm B is protected and freshly verified before it becomes Ready under the new profile.
+7. Select **Download Ready Images**. Confirm it downloads only currently verified protected PNGs. It must exclude originals, failed items, unscanned items, and items with unresolved BLOCK or PROTECT findings.
+8. In DevTools Network, confirm the workflow makes no request containing screenshot bytes, OCR text, findings, or protected output.

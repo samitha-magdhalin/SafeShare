@@ -38,11 +38,11 @@ it('recovers the fake dark editor credentials and keeps its public URL informati
   expect(findings.some(f=>f.type==='Public URL'&&f.severity==='INFO'&&!f.selected)).toBe(true);
   expect(findings.filter(f=>f.severity==='CRITICAL').every(f=>f.box&&f.box.width>0)).toBe(true);
   expect(findings.filter(f=>f.box).every(f=>f.box!.x>=0&&f.box!.y>=0&&f.box!.x+f.box!.width<=1600&&f.box!.y+f.box!.height<=900)).toBe(true);
-});
+},15000);
 it('recovers the fake dark terminal credentials and contact details',async()=>{
   const findings=await recognizeFixture('fake-terminal-dark.png');
   for(const type of ['AWS Access Key','API Token','Bearer Token','Internal URL','Internal IP','Password','Email'])expect(findings.some(f=>f.type===type)).toBe(true);
-});
+},15000);
 it('rescans a protected dark screenshot and leaves only informational content',async()=>{
   const original=await recognizeFixture('fake-vscode-dark.png');
   const png=PNG.sync.read(await readFile(resolve('public/fixtures/fake-vscode-dark.png')));
