@@ -45,7 +45,7 @@ describe('sharing profile workflow',()=>{
   it('allows QA WARN findings with a visible review recommendation',async()=>{
     controls.scan.mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0}).mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0});
     const container=await mount();
-    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');
+    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');await click(container,'Approve for Sharing');
     expect(container.textContent).toContain('Ready to Share \u2014 review recommended');
     expect(container.textContent).toContain('1 policy warning remains');
     expect(button(container,'Copy Safe Image')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
@@ -54,7 +54,7 @@ describe('sharing profile workflow',()=>{
   it('invalidates successful verification and Copy/Export after switching profiles',async()=>{
     controls.scan.mockResolvedValueOnce({findings:[password],textFindings:[password],metadataCount:0}).mockResolvedValueOnce({findings:[],textFindings:[],metadataCount:0}).mockResolvedValueOnce({findings:[],textFindings:[],metadataCount:0});
     const container=await mount();
-    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');
+    await click(container,'Bug Report / QA');await paste();await click(container,'Scan image');await click(container,'Protect & verify');await click(container,'Approve for Sharing');
     expect(container.textContent).toContain('Ready to Share');
     expect(button(container,'Copy Safe Image')?.disabled).toBe(false);expect(button(container,'Export protected image')?.disabled).toBe(false);
     await click(container,'Public Documentation');
@@ -62,7 +62,7 @@ describe('sharing profile workflow',()=>{
     expect(container.textContent).not.toContain('Ready to Share');
     expect(button(container,'Copy Safe Image')).toBeUndefined();expect(button(container,'Export protected image')).toBeUndefined();
     expect(controls.scan).toHaveBeenCalledTimes(2);
-    await click(container,'Protect & verify');
+    await click(container,'Protect & verify');await click(container,'Approve for Sharing');
     expect(container.textContent).toContain('Ready to Share');expect(controls.scan).toHaveBeenCalledTimes(3);
   });
 });

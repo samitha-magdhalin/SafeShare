@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Finding } from '../types';
 import { PROFILES } from '../policy/profiles';
-import { batchSummary, createBatchItem, policyCounts, reevaluateItem, safeOutputNames, statusAfterScan } from '../batch/model';
+import { batchSummary, createBatchItem, policyCounts, reevaluateItem, safeOutputNames, statusAfterScan, isReleaseEligible } from '../batch/model';
 
 const internal:Finding={id:'internal',type:'Internal URL',category:'network',severity:'SENSITIVE',confidence:90,maskedPreview:'http://i•••l',source:'ocr',description:'Internal URL',selected:false,fingerprint:'url:internal'};
 const publicUrl:Finding={...internal,id:'public',type:'Public URL',maskedPreview:'https://e???m'};
@@ -15,5 +15,6 @@ describe('batch state model',()=>{
   it('derives summary from independent item states',()=>{const ready={...item('a.png'),status:'ready' as const,findings:[internal]},failed={...item('b.png'),status:'failed' as const,findings:[unknown]};expect(batchSummary([ready,failed],PROFILES.qa.policy)).toEqual({total:2,ready:1,noAction:0,attention:1,findings:2,warnings:2});});
   it('classifies empty and ALLOW-only scans as no action while required findings need protection',()=>{expect(statusAfterScan([],PROFILES.client.policy)).toBe('no-findings');expect(statusAfterScan([publicUrl],PROFILES.client.policy)).toBe('no-findings');expect(statusAfterScan([internal],PROFILES.client.policy)).toBe('needs-protection');});
   it('keeps a scanned zero-finding item non-actionable after policy reevaluation',()=>{const scanned={...item(),status:'no-findings' as const,findings:[]};expect(reevaluateItem(scanned,PROFILES.public.policy).status).toBe('no-findings');});
+  it('requires current verification and approval of the exact protected Blob for release',()=>{const blob=new Blob(['verified']);const current={...item(),status:'ready' as const,outputBlob:blob,approvedOutput:blob,verification:{checks:[],unresolved:[],reviewCount:0,ready:true}};expect(isReleaseEligible(current)).toBe(true);expect(isReleaseEligible({...current,approvedOutput:new Blob(['stale'])})).toBe(false);expect(isReleaseEligible({...current,verification:{...current.verification!,ready:false}})).toBe(false);expect(isReleaseEligible({...current,status:'awaiting-review'})).toBe(false);});
   it('creates unique sanitized output names for duplicates',()=>{const a=item('same file.png'),b=item('same file.png');const names=safeOutputNames([a,b]);expect(names.get(a.id)).toBe('same-file-safeshare.png');expect(names.get(b.id)).toBe('same-file-safeshare-2.png');});
 });

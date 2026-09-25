@@ -61,6 +61,7 @@ async function readyWorkflow(container: HTMLElement) {
   await paste(new File(['original'], 'clipboard.png', { type: 'image/png' }));
   await click(container, 'Scan image');
   await click(container, 'Protect & verify');
+  if (!button(container, 'Approve for Sharing')?.disabled) await click(container, 'Approve for Sharing');
 }
 
 describe('clipboard image workflow', () => {
@@ -146,6 +147,10 @@ describe('clipboard image workflow', () => {
     const exportButton = button(container, 'Export protected image');
     expect(copy).toBeDefined();
     expect(exportButton).toBeDefined();
+    expect(container.textContent).toContain('Awaiting review');
+    expect(copy?.disabled).toBe(true);
+    expect(exportButton?.disabled).toBe(true);
+    await click(container, 'Approve for Sharing');
     expect(container.textContent).toContain('Ready to Share');
     expect(copy?.disabled).toBe(false);
     await click(container, 'Copy Safe Image');

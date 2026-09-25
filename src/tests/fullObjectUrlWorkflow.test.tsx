@@ -81,6 +81,8 @@ describe('complete image URL workflow in StrictMode', () => {
       expect(protectedUrl).toBe('blob:https://example.test/2');
       expect(active.has(protectedUrl!)).toBe(true);
       expect(active.has(original!)).toBe(true);
+      expect(container.textContent).toContain('Awaiting review');
+      await click('Approve for Sharing');
       expect(container.textContent).toContain('Ready to Share');
       await click('Export protected image');
       expect(download).toHaveBeenCalledOnce();
