@@ -8,3 +8,5 @@
 .remaining-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid #f0e7dc;font-size:12px}
 .remaining-row strong{flex:1}
 .remaining-row code{color:#647278;word-break:break-all}
+
+.verification-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}.verification-actions button{width:100%;min-width:0;text-align:center;justify-content:center;line-height:1.25}.copy-support-message{text-align:center}@media(max-width:540px){.verification-actions{grid-template-columns:1fr}}
