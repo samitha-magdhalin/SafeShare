@@ -1,0 +1,2 @@
+import {describe,expect,it,vi} from 'vitest';import {ClipboardScanController,type NativeBridge} from './controller';
+describe('clipboard event filtering',()=>{it('ignores a non-image event without notifying or logging scan content',async()=>{const notify=vi.fn(async()=>undefined),logger=vi.fn(),bridge:NativeBridge={listenForImages:async()=>()=>undefined,readClipboardImage:async()=>null,notify};await new ClipboardScanController(bridge,logger).enqueue();expect(notify).not.toHaveBeenCalled();expect(logger).not.toHaveBeenCalled();});});

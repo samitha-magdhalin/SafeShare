@@ -1,0 +1,2 @@
+import {describe,expect,it} from 'vitest';import type {AgentLogEvent} from './privacyLog';
+describe('privacy-safe Agent logs',()=>{it('allows operational fields only',()=>{const event:AgentLogEvent={event:'scan completed',findingCount:3,attentionRequired:true,durationMs:42},serialized=JSON.stringify(event);expect(serialized).not.toMatch(/ocr|value|description|email|phone/i);expect(Object.keys(event)).toEqual(['event','findingCount','attentionRequired','durationMs']);});});

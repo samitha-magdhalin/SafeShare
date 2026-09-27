@@ -1,0 +1,2 @@
+import {useEffect} from 'react';import {ClipboardScanController,tauriBridge} from './controller';
+export default function App(){useEffect(()=>{const controller=new ClipboardScanController(tauriBridge);let disposed=false,stop:(()=>void)|undefined;void controller.start().then(unlisten=>{if(disposed)unlisten();else stop=unlisten;});return()=>{disposed=true;stop?.();};},[]);return <main><h1>SafeShare Agent</h1><p>Clipboard image monitoring is running locally.</p></main>;}
