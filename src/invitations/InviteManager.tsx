@@ -1,0 +1,19 @@
+﻿import { useEffect,useState,type FormEvent } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Workspace } from '../workspace/types';
+import { createInvitation,listInvitations,revokeInvitation } from './service';
+import type { CreatedInvitation,InvitationRole,WorkspaceInvitation } from './types';
+
+export function InviteManager({client,workspace}:{client:SupabaseClient;workspace:Workspace}){
+  const allowed=workspace.role==='owner'||workspace.role==='admin';
+  const[open,setOpen]=useState(false),[email,setEmail]=useState(''),[role,setRole]=useState<InvitationRole>('member'),[rows,setRows]=useState<WorkspaceInvitation[]>([]);
+  const[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[created,setCreated]=useState<CreatedInvitation|null>(null),[copyFailed,setCopyFailed]=useState(false);
+  async function refresh(){if(!allowed)return;try{setRows(await listInvitations(client,workspace.id));}catch{setMessage('Invitations could not be loaded. Please try again.');}}
+  useEffect(()=>{void refresh()},[client,workspace.id,allowed]);
+  if(!allowed)return null;
+  async function submit(event:FormEvent){event.preventDefault();setBusy(true);setMessage('');setCreated(null);setCopyFailed(false);try{const result=await createInvitation(client,workspace.id,email,role);setCreated(result);setEmail('');setMessage('Invitation created.');await refresh();}catch(error){setMessage(error instanceof Error?error.message:'Invitation could not be created. Please try again.');}finally{setBusy(false);}}
+  async function copy(){if(!created)return;try{await navigator.clipboard.writeText(created.link);setCopyFailed(false);setMessage('Invite link copied.');}catch{setCopyFailed(true);setMessage('Copy failed. Use the temporary field below to copy the invite link.');}}
+  async function revoke(row:WorkspaceInvitation){setBusy(true);setMessage('');try{await revokeInvitation(client,row.id);setMessage('Invitation revoked.');await refresh();}catch(error){setMessage(error instanceof Error?error.message:'Invitation could not be revoked. Please try again.');}finally{setBusy(false);}}
+  const visible=rows.filter(row=>row.status==='pending'||row.status==='expired');
+  return <section className="invite-manager"><div className="invite-heading"><div><h3>Invite member</h3><p>Invite a teammate to this existing workspace.</p></div><button className="secondary" onClick={()=>setOpen(value=>!value)}>{open?'Cancel':'Invite member'}</button></div>{open&&<form className="invite-form" onSubmit={submit}><label>Work email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} autoComplete="email" required/></label><label>Role<select value={role} onChange={event=>setRole(event.target.value as InvitationRole)}>{workspace.role==='owner'&&<option value="admin">Admin</option>}<option value="member">Member</option></select></label><button className="primary" disabled={busy}>{busy?'Creating invitation...':'Create invitation'}</button></form>}{message&&<div className="auth-message" role="status">{message}</div>}{created&&<div className="invite-created"><p>Send this link to the invited teammate. They must sign in with the invited email address.</p><button className="primary" onClick={()=>void copy()}>Copy invite link</button>{copyFailed&&<label>Temporary invite link<input readOnly value={created.link} onFocus={event=>event.currentTarget.select()}/></label>}</div>}<div className="pending-invitations"><h3>Pending invitations</h3>{visible.length===0?<div className="empty-findings">No pending invitations.</div>:visible.map(row=><article key={row.id}><div><strong>{row.email}</strong><span>{row.role.toUpperCase()} · {row.status==='expired'?'Expired':'Expires '+new Date(row.expiresAt).toLocaleDateString()}</span></div>{row.status==='pending'&&<button className="secondary" disabled={busy} onClick={()=>void revoke(row)}>Revoke</button>}</article>)}</div></section>;
+}

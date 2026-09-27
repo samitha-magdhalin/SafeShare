@@ -126,7 +126,7 @@ describe('clipboard image workflow', () => {
     await paste(new File(['first'], 'first.png', { type: 'image/png' }));
         await paste(new File(['second'], 'second.png', { type: 'image/png' }));
     await act(async () => finishScan({ findings: [sensitive], textFindings: [sensitive], metadataCount: 0 }));
-    expect(container.textContent).toContain('No sensitive findings requiring protection');
+    expect(container.textContent).toContain('No sensitive information requiring protection');
     expect(container.textContent).not.toContain('Password');
   });
   it('only exposes copy after successful verification and copies the protected PNG', async () => {

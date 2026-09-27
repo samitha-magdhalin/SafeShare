@@ -1,0 +1,8 @@
+import type { Finding } from '../types';
+import { actionForFinding,categoryForFinding } from '../policy/evaluatePolicy';
+import type { Policy } from '../policy/types';
+import { emptyCategoryCounts,type ActivityEventType,type ActivityWorkflow,type SafeActivityInput,type SafeCategoryCounts } from './types';
+const map={credentials:'credential',email:'email',phone:'phone',internalIp:'internal_ip',internalUrl:'internal_url',publicUrl:'public_url',qr:'qr',metadata:'metadata'} as const;
+export function buildWorkflowActivity(eventType:Exclude<ActivityEventType,'TEAM_POLICY_UPDATED'>,workflow:Exclude<ActivityWorkflow,'POLICY'>,findings:ReadonlyArray<Finding>,policy:Policy,policyVersion:number):SafeActivityInput{const categoryCounts=emptyCategoryCounts();for(const finding of findings){const category=categoryForFinding(finding);if(category!=='unknown')categoryCounts[map[category]]++;}return{eventType,workflow,sharingContext:'Team Policy',policyVersion,totalFindings:findings.length,categoryCounts,protectedCount:findings.filter(f=>['BLOCK','PROTECT'].includes(actionForFinding(f,policy))).length,warningCount:findings.filter(f=>actionForFinding(f,policy)==='WARN').length,verificationStatus:eventType==='SCREENSHOT_VERIFIED'?'VERIFIED':'APPROVED',reviewStatus:eventType==='SCREENSHOT_VERIFIED'?'PENDING':'APPROVED'}}
+export function buildPolicyActivity(policyVersion:number):SafeActivityInput{return{eventType:'TEAM_POLICY_UPDATED',workflow:'POLICY',sharingContext:'Team Policy',policyVersion,totalFindings:0,categoryCounts:emptyCategoryCounts(),protectedCount:0,warningCount:0,verificationStatus:'UPDATED',reviewStatus:'NOT_REQUIRED'}}
+export function categoryTotal(value:SafeCategoryCounts){return Object.values(value).reduce((a,b)=>a+b,0)}

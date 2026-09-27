@@ -11,3 +11,9 @@ Verification re-runs the complete OCR and detection pipeline on the protected PN
 ## Network privacy check
 
 Browser network inspection of the complete workflow was attempted but the available browser session could not start in this environment. Source review found no `fetch`/XHR/WebSocket transmission of image or finding content. The local dev server returned HTTP 200 for the same-origin OCR worker and language model paths. This is not a substitute for a recorded browser network check; perform the check in browser DevTools before deployment.
+
+## Workspace activity boundary
+
+Workspace activity is an append-only SaaS control-plane feature. It records only allowlisted event/workflow types, policy version, bounded generic category totals, protected and warning counts, verification/review status, workspace and actor IDs, and time. The actor is derived on the server from the authenticated session.
+
+The activity pipeline never receives or stores screenshot files, pixels, filenames, Blob URLs, OCR text or boxes, finding descriptions or previews, detected values, protected images, reports, QR/EXIF payloads, or clipboard contents. Activity failure does not alter local verification or sharing authorization.

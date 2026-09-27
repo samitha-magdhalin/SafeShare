@@ -13,7 +13,7 @@ const password:Finding={id:'password',type:'Password',category:'secret',severity
 const internalUrl:Finding={id:'internal',type:'Internal URL',category:'network',severity:'SENSITIVE',confidence:99,maskedPreview:'http://i•••l',source:'ocr',description:'Internal URL visible.',selected:true,fingerprint:'Internal URL:test'};
 const mounted:{root:Root;container:HTMLDivElement}[]=[];
 function button(container:HTMLElement,label:string){return[...container.querySelectorAll('button')].find(item=>item.textContent?.includes(label));}
-async function click(container:HTMLElement,label:string){const target=button(container,label);if(!target)throw new Error(`Missing button ${label}`);await act(async()=>target.click());}
+async function click(container:HTMLElement,label:string){const target=button(container,label);if(target){await act(async()=>target.click());return;}const select=container.querySelector('#sharing-profile') as HTMLSelectElement|null;const option=select?[...select.options].find(item=>item.text===label):undefined;if(select&&option){await act(async()=>{select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}))});return;}throw new Error(`Missing control ${label}`);}
 async function mount(){const container=document.createElement('div');document.body.append(container);const root=createRoot(container);mounted.push({root,container});await act(async()=>root.render(<StrictMode><App/></StrictMode>));return container;}
 async function paste(file=new File(['image'],'profile.png',{type:'image/png'})){const event=new Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{items:[{kind:'file',type:file.type,getAsFile:()=>file}]}});await act(async()=>window.dispatchEvent(event));}
 
@@ -28,12 +28,12 @@ describe('sharing profile workflow',()=>{
   it('defaults to Client Sharing and recalculates a scanned finding without rerunning OCR',async()=>{
     controls.scan.mockResolvedValueOnce({findings:[internalUrl],textFindings:[internalUrl],metadataCount:0});
     const container=await mount();
-    expect(button(container,'Client Sharing')?.getAttribute('aria-pressed')).toBe('true');
+    expect((container.querySelector('#sharing-profile') as HTMLSelectElement).value).toBe('client');
     await paste();
     expect(container.textContent).toContain('Policy: PROTECT');
     expect(controls.scan).toHaveBeenCalledOnce();
     await click(container,'Bug Report / QA');
-    expect(container.textContent).toContain('Sharing profile: Bug Report / QA');
+    expect(container.textContent).toContain('Policy: Bug Report / QA');
     expect(container.textContent).toContain('Policy: WARN');
     expect(controls.scan).toHaveBeenCalledOnce();
     const finding=container.querySelector('.finding')!;

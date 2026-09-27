@@ -1,0 +1,27 @@
+import { describe,expect,it,vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { acceptInvitation,createInvitation,listInvitations,revokeInvitation } from '../invitations/service';
+
+const token='a'.repeat(64);
+describe('workspace invitation service',()=>{
+  it('creates a normalized invitation and returns an in-memory link',async()=>{const rpc=vi.fn().mockResolvedValue({data:{invitation_id:'i1',invite_token:token,expires_at:'later'},error:null});const result=await createInvitation({rpc} as never,'w1',' Pilot@Example.COM ','member','https://safe.example');expect(rpc).toHaveBeenCalledWith('invite_workspace_member',{target_workspace:'w1',invite_email:'pilot@example.com',invite_role:'member'});expect(result.link).toBe('https://safe.example/invite/'+token)});
+  it('lists safe invitation fields without token material',async()=>{const rpc=vi.fn().mockResolvedValue({data:[{id:'i1',email:'pilot@example.com',role:'member',status:'pending',created_at:'now',expires_at:'later'}],error:null});const rows=await listInvitations({rpc} as never,'w1');expect(rows).toEqual([{id:'i1',email:'pilot@example.com',role:'member',status:'pending',createdAt:'now',expiresAt:'later'}]);expect(JSON.stringify(rows)).not.toContain(token)});
+  it('accepts using only the opaque token and maps the existing workspace',async()=>{const rpc=vi.fn().mockResolvedValue({data:{id:'w1',name:'Company',created_by:'owner',role:'member'},error:null});await expect(acceptInvitation({rpc} as never,token)).resolves.toEqual({id:'w1',name:'Company',createdBy:'owner',role:'member'});expect(rpc).toHaveBeenCalledWith('accept_workspace_invitation',{invite_token:token})});
+  it('rejects malformed links before contacting Supabase',async()=>{const rpc=vi.fn();await expect(acceptInvitation({rpc} as never,'predictable-id')).rejects.toThrow('invalid');expect(rpc).not.toHaveBeenCalled()});
+  it.each([['INVITE_WRONG_ACCOUNT','different account'],['INVITE_EXPIRED','expired'],['INVITE_REVOKED','revoked'],['INVITE_ACCEPTED','already been accepted'],['INVITE_DUPLICATE','already exists'],['INVITE_NOT_AUTHORIZED','permission']])('maps %s to a safe user error',async(detail,visible)=>{const rpc=vi.fn().mockResolvedValue({data:null,error:{message:detail+' internal sql detail'}});await expect(acceptInvitation({rpc} as never,token)).rejects.toThrow(visible)});
+  it('revokes by invitation id without sending workspace or account data',async()=>{const rpc=vi.fn().mockResolvedValue({error:null});await revokeInvitation({rpc} as never,'i1');expect(rpc).toHaveBeenCalledWith('revoke_workspace_invitation',{target_invitation:'i1'})});
+});
+
+describe('invitation database authorization contract',()=>{
+  const sql=readFileSync(join(process.cwd(),'supabase','migrations','202609260004_workspace_invitations.sql'),'utf8');
+  it('stores only a token digest and creates a cryptographically random raw token',()=>{expect(sql).toContain('token_digest bytea');expect(sql).toContain("gen_random_bytes(32)");expect(sql).toContain("digest(raw_token,'sha256')");expect(sql).not.toMatch(/invite_token text[^)]*workspace_invitations/i)});
+  it('allows only Admin and Member invitation roles and never Owner',()=>{expect(sql).toContain("role in ('admin','member')");expect(sql).toContain("invite_role not in ('admin','member')");expect(sql).toContain("caller_role='admin' and invite_role<>'member'")});
+  it('enforces owner/admin invitation authority and blocks members and non-members',()=>{expect(sql).toContain("caller_role not in ('owner','admin')");expect(sql).toContain('public.workspace_role(target_workspace)');expect(sql).toContain('INVITE_NOT_AUTHORIZED')});
+  it('enforces seven-day server expiry and terminal invitation states',()=>{expect(sql).toContain("interval '7 days'");expect(sql).toContain("invitation.expires_at<=now()");for(const state of ['INVITE_EXPIRED','INVITE_REVOKED','INVITE_ACCEPTED'])expect(sql).toContain(state)});
+  it('binds acceptance to the confirmed authenticated account email',()=>{expect(sql).toContain('where id=auth.uid()');expect(sql).toContain('email_confirmed_at');expect(sql).toContain('account_email<>invitation.email');expect(sql).not.toContain('accepted_email')});
+  it('atomically uses the stored role and cannot create duplicate memberships',()=>{expect(sql).toContain('values(invitation.workspace_id,auth.uid(),invitation.role)');expect(sql).toContain('on conflict(workspace_id,user_id) do nothing');expect(sql).toContain("set status='accepted',accepted_at=now(),accepted_by=auth.uid()")});
+  it('has scoped reads and no direct browser writes',()=>{expect(sql).toContain('enable row level security');expect(sql).toContain('revoke insert,update,delete');expect(sql).toContain('owners read workspace invitations');expect(sql).toContain('admins read member invitations');expect(sql).not.toMatch(/create policy[^;]+for (insert|update|delete)/i)});
+  it('keeps workspace A isolated from workspace B',()=>{expect(sql).toContain('public.workspace_role(workspace_id)');expect(sql).toContain('wi.workspace_id=target_workspace')});
+  it('keeps the invitation table limited to administrative fields',()=>{const table=sql.slice(sql.indexOf('create table public.workspace_invitations'),sql.indexOf('create unique index'));for(const forbidden of ['workspace_activity','screenshot','ocr','finding','blob','report','raw_token','invite_token'])expect(table.toLowerCase()).not.toContain(forbidden)});
+});
