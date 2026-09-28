@@ -19,10 +19,10 @@ export function riskLevel(findings:Finding[]):'HIGH'|'ELEVATED'|'LOW'{
   return 'LOW';
 }
 function fingerprint(value:string):string{let h=2166136261;for(const c of value.toLowerCase()){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return(h>>>0).toString(16);}
-type Match={type:string;category:Finding['category'];severity:Severity;value:string;start:number;end:number;description:string};
+type Match={type:string;category:Finding['category'];severity:Severity;value:string;start:number;end:number;boxStart?:number;boxEnd?:number;description:string};
 const add=(list:Match[],match:Omit<Match,'start'|'end'>,start:number,end:number)=>list.push({...match,start,end});
 const secretKeys='AWS\\s*[_-]?\\s*SECRET\\s*[_-]?\\s*ACCESS\\s*[_-]?\\s*KEY|AWS\\s*[_-]?\\s*ACCESS\\s*[_-]?\\s*KEY\\s*[_-]?\\s*ID|DATABASE\\s*[_-]?\\s*URL|API\\s*[_-]?\\s*TOKEN|API\\s*[_-]?\\s*KEY|APIKEY|ACCESS\\s*[_-]?\\s*TOKEN|AUTH\\s*[_-]?\\s*TOKEN|SECRET\\s*[_-]?\\s*KEY|PRIVATE\\s*[_-]?\\s*KEY|PASSWORD|PASSWD|TOKEN|SECRET';
-const secretRe=new RegExp(`\\b(${secretKeys})(\\s*[:=]\\s*|\\s+)["']?([^\\s"']{2,}(?:\\s+[A-Za-z0-9._~+/-]{2,})?)`,'gi');
+const secretRe=new RegExp(`\\b(${secretKeys})(\\s*[:=]\\s*|\\s+)["']?([^\\s"']{2,}(?:\\s+[A-Za-z0-9._~+/-]{2,})*)`,'gi');
 const databaseRe=/\b(?:postgresql|postgres|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s<>"']+/gi;
 const urlRe=/\bhttps?:\/\/[^\s<>"']+/gi;
 const emailRe=/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -47,6 +47,96 @@ function validCredential(value:string,delimiter:string):boolean{
   if(!/[:=]/.test(delimiter)&&!/[0-9_+./-]/.test(value)&&value.length<16)return false;
   return true;
 }
+type PositionedWord=Word&{start:number;end:number};
+function spatiallyContinuous(leftStart:number,leftEnd:number,rightStart:number,rightEnd:number,words:PositionedWord[]):boolean{
+  const left=[...words].reverse().find(word=>word.end>leftStart&&word.start<leftEnd);
+  const right=words.find(word=>word.end>rightStart&&word.start<rightEnd);
+  if(!left||!right||left===right)return false;
+  const verticalOverlap=Math.min(left.box.y+left.box.height,right.box.y+right.box.height)-Math.max(left.box.y,right.box.y);
+  if(verticalOverlap<Math.min(left.box.height,right.box.height)*.5)return false;
+  const gap=right.box.x-(left.box.x+left.box.width);
+  const averageCharacterWidth=Math.min(left.box.width/Math.max(1,left.text.length),right.box.width/Math.max(1,right.text.length));
+  const maximumTokenGap=Math.max(2,Math.min(Math.min(left.box.height,right.box.height)*.35,averageCharacterWidth*.75));
+  return gap<=maximumTokenGap;
+}
+function emailWordsContinuous(left:PositionedWord,right:PositionedWord):boolean{
+  const verticalOverlap=Math.min(left.box.y+left.box.height,right.box.y+right.box.height)-Math.max(left.box.y,right.box.y);
+  if(verticalOverlap<Math.min(left.box.height,right.box.height)*.5)return false;
+  const gap=right.box.x-(left.box.x+left.box.width);
+  const characterWidth=Math.max(left.box.width/Math.max(1,left.text.length),right.box.width/Math.max(1,right.text.length));
+  const maximumEmailGap=Math.max(3,Math.min(Math.min(left.box.height,right.box.height)*.6,characterWidth));
+  return gap<=maximumEmailGap;
+}
+function reconstructedEmails(words:PositionedWord[]):Match[]{
+  const runs:PositionedWord[][]=[];
+  for(const word of words){
+    const run=runs[runs.length-1];
+    if(run&&emailWordsContinuous(run[run.length-1],word))run.push(word);else runs.push([word]);
+  }
+  const matches:Match[]=[];
+  for(const run of runs){
+    let compact='';
+    const positions:Array<{word:PositionedWord;compactStart:number;compactEnd:number}>=[];
+    const seenStarts=new Set<number>();
+    for(const word of run){
+      const compactStart=compact.length;compact+=word.text;
+      positions.push({word,compactStart,compactEnd:compact.length});
+      const re=new RegExp(emailRe.source,'gi');
+      let match:RegExpExecArray|null;
+      while((match=re.exec(compact))){
+        const compactStartIndex=match.index,compactEndIndex=match.index+match[0].length;
+        const first=positions.find(position=>position.compactEnd>compactStartIndex);
+        const last=[...positions].reverse().find(position=>position.compactStart<compactEndIndex);
+        if(!first||!last)continue;
+        const start=first.word.start+compactStartIndex-first.compactStart;
+        if(seenStarts.has(start))continue;
+        const end=last.word.start+compactEndIndex-last.compactStart;
+        seenStarts.add(start);
+        matches.push({type:'Email',category:'personal',severity:'SENSITIVE',value:match[0],start,end,description:'Email address visible in the image.'});
+      }
+    }
+  }
+  return matches;
+}
+function beginsIndependentField(index:number,words:PositionedWord[]):boolean{
+  const lookahead=words.slice(index,index+3).map(word=>word.text).join('');
+  return /^[A-Za-z][A-Za-z0-9_-]{1,40}\s*[:=]/.test(lookahead);
+}
+function credentialProtectionEnd(valueStart:number,detectedEnd:number,words:PositionedWord[]):number{
+  if(!words.length)return detectedEnd;
+  let lastIndex=-1;
+  for(let index=0;index<words.length;index++)if(words[index].end>valueStart&&words[index].start<detectedEnd)lastIndex=index;
+  if(lastIndex<0)return detectedEnd;
+  let end=Math.max(detectedEnd,words[lastIndex].end);
+  for(let index=lastIndex+1;index<words.length;index++){
+    const previous=words[index-1],current=words[index];
+    if(beginsIndependentField(index,words)||/^[|;,]+$/.test(current.text))break;
+    const verticalOverlap=Math.min(previous.box.y+previous.box.height,current.box.y+current.box.height)-Math.max(previous.box.y,current.box.y);
+    if(verticalOverlap<Math.min(previous.box.height,current.box.height)*.35)break;
+    const gap=current.box.x-(previous.box.x+previous.box.width);
+    const characterWidth=Math.max(previous.box.width/Math.max(1,previous.text.length),current.box.width/Math.max(1,current.text.length));
+    const maximumRunGap=Math.max(4,Math.min(Math.min(previous.box.height,current.box.height)*.9,characterWidth*1.25));
+    if(gap>maximumRunGap)break;
+    end=current.end;
+  }
+  return end;
+}
+function credentialValue(raw:string,start:number,words:PositionedWord[]):string{
+  const parts=[...raw.matchAll(/\S+/g)].map(match=>({text:match[0],start:start+match.index!,end:start+match.index!+match[0].length}));
+  let count=1;
+  while(count<parts.length){
+    const previous=parts[count-1],current=parts[count];
+    const currentWordIndex=words.findIndex(word=>word.end>current.start&&word.start<current.end);
+    if(currentWordIndex>=0&&beginsIndependentField(currentWordIndex,words))break;
+    const connectorSplit=/[_./-]$/.test(previous.text);
+    const continues=words.length>0
+      ? spatiallyContinuous(previous.start,previous.end,current.start,current.end,words)
+      : connectorSplit;
+    if(!continues)break;
+    count++;
+  }
+  return parts.slice(0,count).map(part=>part.text).join(' ');
+}
 function union(boxes:Box[]):Box|undefined{if(!boxes.length)return;const x=Math.min(...boxes.map(b=>b.x)),y=Math.min(...boxes.map(b=>b.y));return{x,y,width:Math.max(...boxes.map(b=>b.x+b.width))-x,height:Math.max(...boxes.map(b=>b.y+b.height))-y};}
 export function boxForSpan(start:number,end:number,words:Array<Word&{start:number;end:number}>):Box|undefined{
   const boxes:Box[]=[];
@@ -59,21 +149,21 @@ export function boxForSpan(start:number,end:number,words:Array<Word&{start:numbe
   return union(boxes);
 }
 export function detectText(text:string,words:Word[]=[]):Finding[]{
+  let cursor=0;const spans=words.map(word=>{const at=text.indexOf(word.text,cursor),start=at<0?cursor:at;cursor=start+word.text.length;return{...word,start,end:cursor};});
   const found:Match[]=[];
   for(const re of [secretRe,bearerRe,databaseRe,urlRe,emailRe,phoneRe,ipRe])re.lastIndex=0;
   let m:RegExpExecArray|null;
-  while((m=secretRe.exec(text))){const key=m[1],delimiter=m[2],parts=m[3].split(/\s+/),value=parts[1]&&(/[_./-]$/.test(parts[0])||parts[0].length<6)?`${parts[0]} ${parts[1]}`:parts[0];if(!validCredential(value,delimiter))continue;const type=credentialType(key),start=m.index+m[0].lastIndexOf(m[3]);add(found,{type,category:'secret',severity:'CRITICAL',value,description:type==='Database Connection String'?'Database connection string with potential credentials.':'Potential credential assignment visible.'},start,start+value.length);}
+  while((m=secretRe.exec(text))){const key=m[1],delimiter=m[2],start=m.index+m[0].lastIndexOf(m[3]),value=credentialValue(m[3],start,spans);if(!validCredential(value,delimiter))continue;const type=credentialType(key),end=start+value.length,boxEnd=credentialProtectionEnd(start,end,spans);add(found,{type,category:'secret',severity:'CRITICAL',value,boxStart:start,boxEnd,description:type==='Database Connection String'?'Database connection string with potential credentials.':'Potential credential assignment visible.'},start,end);}
   while((m=bearerRe.exec(text))){const value=m[1],start=m.index+m[0].lastIndexOf(value);add(found,{type:'Bearer Token',category:'secret',severity:'CRITICAL',value,description:'Authorization bearer token visible.'},start,start+value.length);}
   while((m=databaseRe.exec(text))){const value=m[0].replace(/[),.;]+$/,''),assigned=found.some(f=>f.start<=m!.index&&f.end>=m!.index+value.length&&f.category==='secret');if(assigned)continue;const embedded=/^[a-z+]+:\/\/[^/@\s]+:[^/@\s]+@/i.test(value);add(found,{type:'Database Connection String',category:'secret',severity:embedded?'CRITICAL':'REVIEW',value,description:embedded?'Database connection string with embedded credentials.':'Database connection string needs review.'},m.index,m.index+value.length);}
   while((m=urlRe.exec(text))){const value=m[0].replace(/[),.;]+$/,'');try{const url=new URL(value),host=url.hostname,credential=Boolean(url.username||url.password),internal=host==='localhost'||host.endsWith('.local')||host.endsWith('.internal')||isPrivateIp(host);add(found,{type:credential?'Credential-bearing URL':internal?'Internal URL':'Public URL',category:credential?'secret':'network',severity:credential?'CRITICAL':internal?'SENSITIVE':'INFO',value,description:credential?'URL contains embedded credentials.':internal?'Internal destination visible.':'Public website URL visible.'},m.index,m.index+value.length);}catch{/* malformed URL is not a finding */}}
-  while((m=emailRe.exec(text)))add(found,{type:'Email',category:'personal',severity:'SENSITIVE',value:m[0],description:'Email address visible in the image.'},m.index,m.index+m[0].length);
+  if(spans.length)found.push(...reconstructedEmails(spans));else while((m=emailRe.exec(text)))add(found,{type:'Email',category:'personal',severity:'SENSITIVE',value:m[0],description:'Email address visible in the image.'},m.index,m.index+m[0].length);
   while((m=phoneRe.exec(text))){if(/\d/.test(text[m.index-1]||''))continue;add(found,{type:'Phone',category:'personal',severity:'SENSITIVE',value:m[0],description:'Indian mobile number visible in the image.'},m.index,m.index+m[0].length);}
   while((m=ipRe.exec(text))){if(m[0].split('.').some(part=>Number(part)>255))continue;const internal=isPrivateIp(m[0]);add(found,{type:internal?'Internal IP':'Public IP',category:'network',severity:internal?'SENSITIVE':'INFO',value:m[0],description:internal?'Private or local network address visible.':'Public IP address visible.'},m.index,m.index+m[0].length);}
   const priority=(f:Match)=>f.category==='secret'?3:f.type==='Internal URL'?2:1;
   const sorted=found.sort((a,b)=>a.start-b.start||priority(b)-priority(a)||b.end-a.end);
   const deduped=sorted.filter((f,i)=>!sorted.some((other,j)=>j!==i&&other.start<=f.start&&other.end>=f.end&&(priority(other)>priority(f)||(priority(other)===priority(f)&&j<i))));
-  let cursor=0;const spans=words.map(word=>{const at=text.indexOf(word.text,cursor),start=at<0?cursor:at;cursor=start+word.text.length;return{...word,start,end:cursor};});
-  return deduped.map((f,index)=>{const matching=spans.filter(word=>word.end>f.start&&word.start<f.end);return{id:`text-${index}`,type:f.type,category:f.category,severity:f.severity,confidence:Math.round(matching.length?matching.reduce((sum,word)=>sum+word.confidence,0)/matching.length:75),box:boxForSpan(f.start,f.end,spans),maskedPreview:mask(f.type,f.value),source:'ocr',description:f.description,selected:f.severity==='CRITICAL'||f.severity==='SENSITIVE',fingerprint:`${f.type}:${fingerprint(f.value)}`};});
+  return deduped.map((f,index)=>{const boxStart=f.boxStart??f.start,boxEnd=f.boxEnd??f.end,matching=spans.filter(word=>word.end>boxStart&&word.start<boxEnd);return{id:`text-${index}`,type:f.type,category:f.category,severity:f.severity,confidence:Math.round(matching.length?matching.reduce((sum,word)=>sum+word.confidence,0)/matching.length:75),box:boxForSpan(boxStart,boxEnd,spans),maskedPreview:mask(f.type,f.value),source:'ocr',description:f.description,selected:f.severity==='CRITICAL'||f.severity==='SENSITIVE',fingerprint:`${f.type}:${fingerprint(f.value)}`};});
 }
 export function verifySelected(original:Finding[],rescanned:Finding[]):{finding:Finding;passed:boolean}[]{
   return original.filter(f=>f.selected).map(f=>({finding:f,passed:!rescanned.some(r=>{

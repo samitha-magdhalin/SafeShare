@@ -1,17 +1,18 @@
 use std::{ptr::copy_nonoverlapping, sync::OnceLock, thread};
 
-use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
+use image::{codecs::png::PngEncoder, ColorType, ImageEncoder, ImageFormat};
 use tauri::{AppHandle, Emitter};
 use windows::{
     core::w,
     Win32::{
-        Foundation::{HGLOBAL, HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{GlobalFree, HGLOBAL, HWND, LPARAM, LRESULT, WPARAM},
         System::{
             DataExchange::{
-                AddClipboardFormatListener, CloseClipboard, GetClipboardData,
+                AddClipboardFormatListener, CloseClipboard, EmptyClipboard, GetClipboardData,
                 IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
+                SetClipboardData,
             },
-            Memory::{GlobalLock, GlobalSize, GlobalUnlock},
+            Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE},
         },
         UI::WindowsAndMessaging::{
             CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
@@ -123,6 +124,86 @@ pub fn read_png() -> Result<Option<Vec<u8>>, ()> {
     }
 }
 
+pub fn write_png(png: &[u8]) -> Result<(), ()> {
+    if png.is_empty() || png.len() > MAX_CLIPBOARD_BYTES {
+        return Err(());
+    }
+    let image = image::load_from_memory_with_format(png, ImageFormat::Png).map_err(|_| ())?;
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let pixel_count = u64::from(width).checked_mul(u64::from(height)).ok_or(())?;
+    if width == 0 || height == 0 || pixel_count > MAX_IMAGE_PIXELS {
+        return Err(());
+    }
+    let dib = rgba_to_dib_v5(rgba.as_raw(), width, height)?;
+    unsafe {
+        OpenClipboard(None).map_err(|_| ())?;
+        let _clipboard_guard = ClipboardGuard;
+        EmptyClipboard().map_err(|_| ())?;
+        set_clipboard_bytes(CF_DIB_V5_FORMAT, &dib)?;
+    }
+    Ok(())
+}
+
+unsafe fn set_clipboard_bytes(format: u32, bytes: &[u8]) -> Result<(), ()> {
+    let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, bytes.len()) }.map_err(|_| ())?;
+    let pointer = unsafe { GlobalLock(memory) };
+    if pointer.is_null() {
+        unsafe {
+            let _ = GlobalFree(Some(memory));
+        }
+        return Err(());
+    }
+    unsafe {
+        copy_nonoverlapping(bytes.as_ptr(), pointer.cast::<u8>(), bytes.len());
+        let _ = GlobalUnlock(memory);
+    }
+    if unsafe { SetClipboardData(format, Some(windows::Win32::Foundation::HANDLE(memory.0))) }
+        .is_err()
+    {
+        unsafe {
+            let _ = GlobalFree(Some(memory));
+        }
+        return Err(());
+    }
+    Ok(())
+}
+
+fn rgba_to_dib_v5(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, ()> {
+    const HEADER_SIZE: usize = 124;
+    let pixel_bytes = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|value| value.checked_mul(4))
+        .ok_or(())?;
+    if rgba.len() != pixel_bytes {
+        return Err(());
+    }
+    let mut dib = vec![0_u8; HEADER_SIZE.checked_add(pixel_bytes).ok_or(())?];
+    dib[0..4].copy_from_slice(&(HEADER_SIZE as u32).to_le_bytes());
+    dib[4..8].copy_from_slice(&(width as i32).to_le_bytes());
+    dib[8..12].copy_from_slice(&(height as i32).to_le_bytes());
+    dib[12..14].copy_from_slice(&1_u16.to_le_bytes());
+    dib[14..16].copy_from_slice(&32_u16.to_le_bytes());
+    dib[16..20].copy_from_slice(&3_u32.to_le_bytes());
+    dib[20..24].copy_from_slice(&(pixel_bytes as u32).to_le_bytes());
+    dib[40..44].copy_from_slice(&0x00ff_0000_u32.to_le_bytes());
+    dib[44..48].copy_from_slice(&0x0000_ff00_u32.to_le_bytes());
+    dib[48..52].copy_from_slice(&0x0000_00ff_u32.to_le_bytes());
+    dib[52..56].copy_from_slice(&0xff00_0000_u32.to_le_bytes());
+    dib[56..60].copy_from_slice(&0x7352_4742_u32.to_le_bytes());
+    for output_y in 0..height as usize {
+        let source_y = height as usize - 1 - output_y;
+        for x in 0..width as usize {
+            let source = (source_y * width as usize + x) * 4;
+            let target = HEADER_SIZE + (output_y * width as usize + x) * 4;
+            dib[target] = rgba[source + 2];
+            dib[target + 1] = rgba[source + 1];
+            dib[target + 2] = rgba[source];
+            dib[target + 3] = rgba[source + 3];
+        }
+    }
+    Ok(dib)
+}
 unsafe fn copy_global_bytes(format: u32) -> Result<Vec<u8>, ()> {
     let handle = unsafe { GetClipboardData(format) }.map_err(|_| ())?;
     let global = HGLOBAL(handle.0);
