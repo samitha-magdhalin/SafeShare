@@ -25,8 +25,8 @@ describe('UI polish safeguards', () => {
   it('retains complete authenticated navigation and accessible state styling', () => {
     const shell = readFileSync(join(sourceRoot, 'app', 'SaaSApp.tsx'), 'utf8');
     const css = readFileSync(join(sourceRoot, 'style.css'), 'utf8');
-    for (const page of ['scanner', 'batch', 'activity', 'team', 'settings']) expect(shell).toContain("'" + page + "'");
-    expect(shell).toContain("page===item?'active':''");
+    for (const page of ['dashboard', 'team', 'policy', 'activity', 'web-scanner', 'settings']) expect(shell).toContain("'" + page + "'");
+    expect(shell).toContain("page===item.page?'active':''");
     expect(shell).toContain('aria-label="Workspace"');
     expect(css).toContain(':focus-visible');
     expect(css).toContain('@media(prefers-reduced-motion:reduce)');
