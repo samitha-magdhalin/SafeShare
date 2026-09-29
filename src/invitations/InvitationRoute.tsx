@@ -7,7 +7,7 @@ import { InvitationError } from './types';
 
 export function InvitationAccess({client,token}:{client:SupabaseClient;token:string}){
   const[mode,setMode]=useState<'signin'|'signup'>('signin');
-  return <><section className="invite-intro"><div className="eyebrow">SAFESHARE WORKSPACE INVITATION</div><h1>Join a SafeShare workspace</h1><p>You've been invited to join a SafeShare workspace. Sign in or create an account with the invited email address to continue.</p></section><AuthForm client={client} mode={mode} invitationToken={token} onNavigate={()=>setMode(value=>value==='signin'?'signup':'signin')}/></>;
+  return <><section className="invite-intro"><div className="eyebrow">SAFESHARE WORKSPACE INVITATION</div><h1>Join a SafeShare workspace</h1><p>You've been invited to join a SafeShare workspace. Sign in or create an account with the invited email address to continue.</p></section><AuthForm client={client} mode={mode} invitationToken={token} allowModeSwitch onNavigate={()=>setMode(value=>value==='signin'?'signup':'signin')}/></>;
 }
 export function InvitationAcceptance({client,token,onAccepted,onContinue}:{client:SupabaseClient;token:string;onAccepted:(workspace:Workspace)=>void;onContinue:()=>void}){
   const[busy,setBusy]=useState(false),[error,setError]=useState(''),[failure,setFailure]=useState<InvitationError['code']|null>(null),[accepted,setAccepted]=useState<Workspace|null>(null);const mounted=useRef(true);
