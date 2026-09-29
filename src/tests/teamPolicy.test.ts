@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CUSTOM_POLICY } from '../policy/profiles';
-import { loadWorkspacePolicy, saveWorkspacePolicy } from '../workspace/policyService';
+import { canManageWorkspacePolicy, loadWorkspacePolicy, saveWorkspacePolicy } from '../workspace/policyService';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 const row={workspace_id:'workspace-1',policy:DEFAULT_CUSTOM_POLICY,version:3,updated_at:'2026-09-26T00:00:00Z',updated_by:'user-1'};
@@ -8,6 +8,7 @@ function loadClient(result:unknown){const single=vi.fn().mockResolvedValue(resul
 describe('workspace team policy service',()=>{
  it('loads and validates a policy for the requested workspace',async()=>{const mock=loadClient({data:row,error:null});expect(await loadWorkspacePolicy(mock.client,'workspace-1')).toEqual({workspaceId:'workspace-1',policy:DEFAULT_CUSTOM_POLICY,version:3,updatedAt:row.updated_at,updatedBy:'user-1'});expect(mock.eq).toHaveBeenCalledWith('workspace_id','workspace-1')});
  it('fails closed for load errors and malformed policies',async()=>{await expect(loadWorkspacePolicy(loadClient({data:null,error:{}}).client,'w')).rejects.toThrow('could not be loaded');await expect(loadWorkspacePolicy(loadClient({data:{...row,policy:{credentials:'ALLOW'}}}).client,'w')).rejects.toThrow('invalid')});
+ it('uses the server membership role as the edit authority',async()=>{const rpc=vi.fn().mockResolvedValue({data:false,error:null});await expect(canManageWorkspacePolicy({rpc} as never,'workspace-1')).resolves.toBe(false);expect(rpc).toHaveBeenCalledWith('can_manage_workspace',{target_workspace:'workspace-1'})});
  it('saves only workspace id, policy rules, and expected version',async()=>{const rpc=vi.fn().mockResolvedValue({data:{...row,version:4},error:null});await saveWorkspacePolicy({rpc} as never,'workspace-1',DEFAULT_CUSTOM_POLICY,3);expect(rpc).toHaveBeenCalledWith('update_workspace_policy',{target_workspace:'workspace-1',new_policy:DEFAULT_CUSTOM_POLICY,expected_version:3});const payload=JSON.stringify(rpc.mock.calls);for(const forbidden of ['Blob','maskedPreview','OCR','finding','image','password','secret value'])expect(payload).not.toContain(forbidden)});
  it('rejects malformed policy before any database request',async()=>{const rpc=vi.fn();await expect(saveWorkspacePolicy({rpc} as never,'w',{credentials:'ALLOW'} as never,1)).rejects.toThrow('invalid');expect(rpc).not.toHaveBeenCalled()});
 });

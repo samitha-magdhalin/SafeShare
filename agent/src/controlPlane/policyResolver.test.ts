@@ -1,0 +1,15 @@
+import { describe,expect,it,vi } from 'vitest';
+import { PROFILES } from '../../../src/policy/profiles';
+import { resolveTeamPolicy,validPolicyCache } from './policyResolver';
+import { ControlPlaneUnavailableError,InvalidTeamPolicyError,type AgentControlPlane,type PolicyCacheRecord,type PolicyCacheStore } from './types';
+const workspace={id:'workspace-a',name:'Workspace A',role:'member' as const};
+const record:PolicyCacheRecord={workspaceId:'workspace-a',workspaceName:'Workspace A',version:3,policy:PROFILES.client.policy,fetchedAt:'2026-09-28T00:00:00.000Z'};
+function plane(getTeamPolicy:AgentControlPlane['getTeamPolicy']):AgentControlPlane{return{signIn:vi.fn(),signOut:vi.fn(),getSession:vi.fn(),listAccessibleWorkspaces:vi.fn(),getTeamPolicy,recordActivity:vi.fn()}}
+function cache(value:unknown):PolicyCacheStore&{write:ReturnType<typeof vi.fn>}{return{read:vi.fn(async()=>value),write:vi.fn(async()=>undefined)}}
+describe('Team Policy resolution',()=>{
+  it('prefers validated server policy and updates safe cache metadata',async()=>{const store=cache(record),server={...record,version:4,source:'server' as const},result=await resolveTeamPolicy(plane(async()=>server),store,workspace);expect(result.version).toBe(4);expect(result.source).toBe('server');expect(store.write).toHaveBeenCalledWith(expect.objectContaining({workspaceId:'workspace-a',version:4,policy:server.policy}));expect(Object.keys(store.write.mock.calls[0][0])).toEqual(['workspaceId','workspaceName','version','policy','fetchedAt'])});
+  it('uses a valid same-workspace cache only when server is unavailable',async()=>{const result=await resolveTeamPolicy(plane(async()=>{throw new ControlPlaneUnavailableError()}),cache(record),workspace);expect(result).toEqual({...record,source:'cache'})});
+  it('fails closed without cache, with malformed cache, or with another workspace cache',async()=>{const offline=plane(async()=>{throw new ControlPlaneUnavailableError()});await expect(resolveTeamPolicy(offline,cache(null),workspace)).rejects.toBeInstanceOf(ControlPlaneUnavailableError);await expect(resolveTeamPolicy(offline,cache({...record,policy:{email:'ALLOW'}}),workspace)).rejects.toBeInstanceOf(ControlPlaneUnavailableError);await expect(resolveTeamPolicy(offline,cache({...record,workspaceId:'workspace-b'}),workspace)).rejects.toBeInstanceOf(ControlPlaneUnavailableError)});
+  it('does not hide a malformed server policy behind cached data',async()=>{await expect(resolveTeamPolicy(plane(async()=>{throw new InvalidTeamPolicyError()}),cache(record),workspace)).rejects.toBeInstanceOf(InvalidTeamPolicyError)});
+  it('validates exact policy categories, version, timestamp, and workspace binding fields',()=>{expect(validPolicyCache(record)).toBe(true);expect(validPolicyCache({...record,version:0})).toBe(false);expect(validPolicyCache({...record,fetchedAt:'invalid'})).toBe(false)});
+});

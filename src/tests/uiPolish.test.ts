@@ -40,6 +40,6 @@ describe('UI polish safeguards', () => {
     expect(app).toContain('Protect & Verify');
     expect(app).toContain('Ready to Share');
     expect(team).toContain('Choose how SafeShare handles each type of information before screenshots are shared.');
-    expect(team).toContain('Managed by your workspace');
+    expect(team).toContain('Managed by your organization');
   });
 });

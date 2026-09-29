@@ -2,8 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Workspace, WorkspaceMember, WorkspaceRole } from './types';
 
 export function validWorkspaceName(value:string):boolean{return value.trim().length>=2&&value.trim().length<=80;}
-export async function loadWorkspace(client:SupabaseClient):Promise<Workspace|null>{
-  const {data,error}=await client.from('workspace_members').select('role,workspaces!inner(id,name,created_by)').limit(1).maybeSingle();
+export async function loadWorkspace(client:SupabaseClient,userId:string):Promise<Workspace|null>{
+  const {data,error}=await client.from('workspace_members').select('role,workspaces!inner(id,name,created_by)').eq('user_id',userId).limit(1).maybeSingle();
   if(error)throw new Error('Workspace could not be loaded.');if(!data)return null;
   const raw=data as unknown as {role:WorkspaceRole;workspaces:{id:string;name:string;created_by:string}};
   return{id:raw.workspaces.id,name:raw.workspaces.name,createdBy:raw.workspaces.created_by,role:raw.role};

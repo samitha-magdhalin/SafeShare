@@ -29,6 +29,7 @@ const MAX_IMAGE_PIXELS: u64 = 40_000_000;
 
 static CLIPBOARD_APP: OnceLock<AppHandle> = OnceLock::new();
 
+
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     message: u32,

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthForm } from '../auth/AuthForm';
 import { isSupabaseConfigured, readSupabaseConfig } from '../lib/supabase/config';
-import { createWorkspace, validWorkspaceName } from '../workspace/service';
+import { createWorkspace, loadWorkspace, validWorkspaceName } from '../workspace/service';
 
 function filesBelow(path:string):string[]{return readdirSync(path,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?filesBelow(join(path,entry.name)):[join(path,entry.name)]);}
 
@@ -22,6 +22,7 @@ describe('workspace service',()=>{
   it('validates workspace names',()=>{expect(validWorkspaceName('A')).toBe(false);expect(validWorkspaceName('Acme QA Team')).toBe(true);expect(validWorkspaceName('x'.repeat(81))).toBe(false)});
   it('creates a workspace atomically through the RPC and represents the creator as owner',async()=>{const rpc=vi.fn().mockResolvedValue({data:{id:'w1',name:'Acme QA Team',created_by:'u1'},error:null});const workspace=await createWorkspace({rpc} as never,'  Acme QA Team  ');expect(rpc).toHaveBeenCalledWith('create_workspace',{workspace_name:'Acme QA Team'});expect(workspace).toEqual({id:'w1',name:'Acme QA Team',createdBy:'u1',role:'owner'})});
   it('rejects invalid names before making a backend call',async()=>{const rpc=vi.fn();await expect(createWorkspace({rpc} as never,' ')).rejects.toThrow('between 2 and 80');expect(rpc).not.toHaveBeenCalled()});
+  it.each([['user-member','member'],['user-owner','owner']] as const)('discovers only the signed-in %s membership',async(userId,role)=>{const maybeSingle=vi.fn(async()=>({data:{role,workspaces:{id:'w1',name:'Team',created_by:'creator'}},error:null})),limit=vi.fn(()=>({maybeSingle})),eq=vi.fn(()=>({limit})),select=vi.fn(()=>({eq})),from=vi.fn(()=>({select}));await expect(loadWorkspace({from} as never,userId)).resolves.toMatchObject({id:'w1',role});expect(eq).toHaveBeenCalledWith('user_id',userId)});
 });
 
 describe('authentication form',()=>{

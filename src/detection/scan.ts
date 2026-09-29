@@ -14,6 +14,9 @@ export function logDevelopmentScanError(stage: string, error: unknown): void {
   // This logger receives errors only. Never pass OCR text, images, findings, or detected values.
   if (import.meta.env.DEV) console.error(`[SafeShare] ${stage}`, error);
 }
+export function resolveOcrRoot(documentUrl: string, baseUrl: string): string {
+  return new URL(baseUrl + 'ocr/', documentUrl).href.replace(/\/$/, '');
+}
 async function requireOcrAssets(root: string): Promise<void> {
   const files = ['worker.min.js','eng.traineddata.gz',...['lstm','simd-lstm','relaxedsimd-lstm'].flatMap(name=>[`core/tesseract-core-${name}.wasm.js`,`core/tesseract-core-${name}.wasm`])];
   for (const file of files) {
@@ -55,7 +58,7 @@ export async function scan(blob: Blob, onProgress: (message:string)=>void): Prom
   catch(error){image.close();logDevelopmentScanError('image canvas',error);throw new ScanError('IMAGE_DECODE',error);}
   try {
     onProgress('Reading visible text…');
-    const root=`${location.origin}${import.meta.env.BASE_URL}ocr`;
+    const root=resolveOcrRoot(location.href,import.meta.env.BASE_URL);
     try { await requireOcrAssets(root); }
     catch(error){logDevelopmentScanError('OCR assets',error);throw new ScanError('OCR_ASSETS',error);}
     let worker: Awaited<ReturnType<typeof import('tesseract.js')['createWorker']>>;

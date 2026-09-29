@@ -1,79 +1,159 @@
-# SafeShare Agent M2
+# SafeShare Agent M4
 
-SafeShare Agent is a Windows desktop development checkpoint for browser-local screenshot detection, review, protection, fresh verification, and explicit clipboard approval. It reuses the SafeShare web OCR, detector, policy, protection, and verification modules.
+SafeShare Agent is a Windows desktop development checkpoint for local screenshot detection, review, protection, fresh verification, clipboard approval, company authentication, workspace selection, and Team Policy synchronization. It reuses the SafeShare web OCR, detector, policy, protection, and verification modules.
 
 ## Architecture
 
-- Rust owns the tray, the `WM_CLIPBOARDUPDATE` listener, in-memory PNG/DIB image conversion, notifications, review-window commands, and the explicit protected-image clipboard write.
-- The local Tauri WebView owns SHA-256 deduplication, packaged Tesseract/WASM OCR, detection, Client Sharing policy evaluation, protection, fresh verification, review state, and approval state.
-- An attention-required screenshot becomes the active volatile review candidate. While it is active, the Agent retains at most the newest pending candidate. Promotion clears protected output, verification, and approval state before the pending candidate becomes active.
-- Protection uses the shared deterministic SafeShare image protection function. The resulting Blob receives a complete new OCR and detector scan. Approval remains unavailable unless `verifyImage` reports the fresh result ready.
-- Approval is bound to the SHA-256 fingerprint of the exact protected bytes. `Approve & Copy` recalculates the fingerprint before invoking the native write.
-- Rust decodes the approved PNG in memory and publishes equivalent pixels as `CF_DIBV5`. The Agent registers the protected fingerprint before writing so its own clipboard event is consumed without a feedback scan.
-- Dismiss clears the active original and protected byte buffers held by the review UI and does not write to or clear the Windows clipboard.
+- Rust owns the tray, Windows clipboard listener, in-memory image conversion, notifications, review-window commands, clipboard image writes, and the small Team Policy cache file.
+- The Tauri WebView owns authentication UI, workspace selection, Team Policy validation, local OCR/detection/protection/verification, review state, and approval state.
+- The Agent reads the existing RLS-protected workspace_members, workspaces, and workspace_policies data. M3 needs no database migration.
+- Supabase auth persistence is disabled. The session and password are not written to browser storage or plaintext files.
+- One accessible workspace is selected automatically. Multiple workspaces require a choice. An account with no workspace remains blocked.
+- The server policy is preferred. A validated cache may be used offline only for the same workspace ID.
+- Each review is bound to its exact workspace, policy version, and validated rules.
+- A policy version or rule change reevaluates local findings and clears protected output, verification, approval, Ready state, and copy authorization.
+- Policy loading runs before each clipboard review and before protection. Missing or malformed policy state fails closed.
+- Sign out clears active and pending screenshots, protected bytes, verification, approval, workspace, and policy from memory.
 
-The local M2 policy is the existing **Client Sharing** profile: credentials `BLOCK`; email, phone, internal IP, and internal URL `PROTECT`; public URL `ALLOW`; QR and metadata `WARN`. M2 does not synchronize a workspace Team Policy.
+## Configuration
+
+The Agent reads the repository root public Vite configuration:
+
+    VITE_SUPABASE_URL=
+    VITE_SUPABASE_ANON_KEY=
+
+agent/.env.example documents these values. Never place a service-role key in the Agent. Account and workspace administration remain in the SafeShare Console.
 
 ## Privacy boundary
 
-- The native listener checks only PNG, `CF_DIBV5`, and `CF_DIB` image formats. It does not request clipboard text.
-- Screenshot pixels, OCR text, findings, protected images, and approval state remain in process memory.
-- The Agent does not persist screenshots or OCR output to disk, browser storage, Supabase, or another service.
-- There is no cloud OCR, application network client, telemetry, analytics, or activity logging.
-- Development logs are typed and limited to lifecycle events, finding count, attention boolean, duration, and generic error category. They do not include OCR text, detected values, previews, finding descriptions, image bytes, or clipboard contents.
+Supabase may receive authentication/session traffic, RLS-scoped workspace membership reads, and Team Policy reads.
 
-## Prerequisites and commands
+The Agent does not send screenshot pixels, clipboard image bytes, OCR text or words, bounding boxes, findings, detected values, protected images, verification details, or approval state to Supabase. OCR, detection, protection, and verification remain local.
 
-Use Node.js, Microsoft WebView2, the stable Rust MSVC toolchain, and Microsoft C++ Build Tools with an appropriate Windows SDK.
+The M3 disk cache contains only workspace ID/name, policy version, validated category/action rules, and fetch timestamp. It contains no screenshots, OCR, findings, protected images, reports, passwords, or auth tokens. Development logs remain structural and contain no OCR text or detected values.
 
-```powershell
-cd D:\SafeShare\agent
-npm install
-npm test
-npm run build
-npm run check:native
-npm run tauri dev
-```
+## Commands
 
-The final command starts the local processing WebView and adds **SafeShare Agent** to the Windows tray. The tray provides `Status: Running`, `Review latest screenshot` when a review is available, and `Quit`.
+    cd D:\SafeShare\agent
+    npm install
+    npm test
+    npm run build
+    npm run check:native
+    npm run tauri dev
 
-## Manual M2 validation
+The tray shows running status, selected workspace, policy version/source, Review latest screenshot, Open SafeShare Agent, and Quit.
 
-M2 was manually validated on the current Windows development machine with synthetic screenshots. The observed behavior was:
+## M2 Windows validation retained
 
-- Win+Shift+S clipboard images were automatically detected.
-- A sensitive screenshot produced the SafeShare warning and could be opened from `Review latest screenshot`.
-- The original screenshot rendered in Review.
-- Synthetic credentials, email addresses, and internal URLs were detected and protected in the final retest.
-- Credential values were completely covered in the validated screenshots while labels remained where geometry permitted.
-- `Protect & Verify` performed a fresh OCR and detector scan of the protected Blob.
-- Fresh verification blocked approval while required sensitive information remained and enabled approval after a successful result.
-- `Approve & Copy` wrote the exact verified protected image to the Windows clipboard, and that image pasted successfully into Paint.
-- The Agent did not create another review from its own clipboard write.
-- An active review was not silently replaced. The newest pending screenshot was promoted after the first review and used its own findings, geometry, protected output, verification, and approval state.
-- Credential and email protection succeeded for the promoted screenshot in the final retest.
-- Dismiss remained non-destructive to the Windows clipboard.
-- Tray launch, status, review command, and quit behavior worked without an immediate crash.
+M2 was manually validated on the current Windows development machine with synthetic screenshots. Win+Shift+S detection, sensitive review, credential/email/internal URL protection, fresh verification, exact approved clipboard output, self-write suppression, pending review promotion, non-destructive dismissal, and tray lifecycle were observed working.
 
-These observations apply only to the current Windows development machine. They do not establish universal Windows compatibility, perfect detection, zero false positives or negatives, enterprise readiness, production readiness, or a complete privacy proof.
+These observations apply only to the current Windows development machine and do not establish universal compatibility, perfect detection, enterprise readiness, or zero false positives/negatives.
 
-## Manual regression procedure
+## Manual M3 validation still required
 
 Use synthetic data only.
 
-1. Start the Agent with `npm run tauri dev` and confirm the tray icon and `Status: Running`.
-2. Capture a screenshot containing a synthetic credential assignment, email address, and internal URL.
-3. Open **Review latest screenshot**, confirm the original image and expected policy counts, and select **Protect & Verify**.
-4. Confirm the protected preview removes the complete sensitive values and that approval remains unavailable if fresh verification finds a required remainder.
-5. After successful verification, select **Approve & Copy**, paste into Paint, and inspect the pasted pixels.
-6. Confirm the Agent does not notify or create another review from its own clipboard write.
-7. Repeat while another screenshot is active. Confirm the newer screenshot waits, is promoted only after the first review finishes or is dismissed, and uses its own findings and protection geometry.
-8. Dismiss a review before approval and confirm the clipboard remains unchanged.
+1. Start online and sign in with an existing confirmed SafeShare account.
+2. Confirm zero, one, and multiple-workspace behavior as applicable. Verify tray workspace and Team Policy version.
+3. Capture a synthetic sensitive screenshot. Confirm actions match Team Policy, then protect, freshly verify, approve, and paste into Paint.
+4. Change Team Policy in the web console. Refresh Agent policy and confirm old protected output, verification, approval, Ready state, and copy authorization are invalidated while local findings are reevaluated.
+5. Reprocess under the new version and confirm the new version through approval.
+6. During the same authenticated run, disconnect after a valid same-workspace policy is cached. Confirm the Agent clearly reports offline cached policy use.
+7. Remove or corrupt the cache in a controlled offline test and confirm review/share authorization remains unavailable.
+8. Sign out and confirm all review state disappears and tray status returns to sign-in required/policy unavailable.
 
 ## Remaining limitations
 
-- Notification-click activation is not treated as a dependable development contract; the validated fallback is **Tray ? Review latest screenshot**.
-- Detection remains dependent on local OCR quality and can produce false positives or false negatives.
-- Clipboard image support is limited to the implemented PNG, uncompressed or bitfield 24/32-bit DIB, and DIBV5 paths, with existing byte and pixel limits.
-- Clipboard lock contention fails safely and does not currently use a retry policy.
-- M2 has no installer validation, startup registration, code-signing validation, Team Policy synchronization, Supabase integration, cloud processing, activity logging, or enterprise deployment support.
+- M3 needs the manual authentication, workspace, online/offline policy, policy-change, and sign-out tests above.
+- Session persistence is intentionally disabled; restart requires sign-in.
+- Offline policy use requires the authenticated in-memory session for the running process. Cache is not authentication.
+- Detection depends on local OCR quality and can produce false positives or false negatives.
+- Clipboard support remains limited to implemented PNG and supported DIB/DIBV5 paths.
+- Notification click activation is not a dependable development contract; tray Review is the fallback.
+- Installer, startup registration, code signing, activity logging, enterprise deployment, and universal Windows compatibility are not validated.
+
+## M4 privacy-safe workspace activity
+
+M4 reuses the existing append-only workspace_activity table and record_workspace_activity RPC. It records only these canonical events:
+
+- SCREENSHOT_VERIFIED after a fresh protected-image scan succeeds with no unresolved required BLOCK or PROTECT findings under the current Team Policy version.
+- SCREENSHOT_APPROVED after the user explicitly selects Approve & Copy and the exact verified protected image is successfully written to the Windows clipboard.
+
+The Agent activity DTO contains only workspace ID, canonical event type, and Team Policy version. The existing RPC requires count fields, so the Agent sends zero for every total, category, protected, and warning count. It does not calculate or transmit screenshot-derived activity counts. There is no device/source column in the existing safe schema, so M4 does not overload another field or collect a device identity.
+
+Activity writes are authorized by the existing Supabase function. The function derives the actor from auth.uid(), rejects non-members, validates allowlisted values, and inserts into an append-only table. Direct browser inserts, updates, and deletes remain unavailable.
+
+Successful activity writes are deduplicated in memory by event type, workspace ID, policy version, and protected-output fingerprint. The fingerprint is used only for local lifecycle deduplication and is never included in the activity DTO or RPC. Policy changes and workspace changes prevent stale authorization from producing an event. Sign out disables later writes.
+
+Activity failure does not change successful local protection, verification, approval, or clipboard output. The Agent displays:
+
+    Protected successfully. Workspace activity could not be updated.
+
+M4 has no offline activity queue. When offline, valid cached Team Policy behavior remains governed by M3, while an activity write may fail safely without persisting tracking data for later submission.
+
+This activity is evidence of the SafeShare security workflow. It is not employee monitoring. M4 does not collect device identity, hostname, Windows username, IP address, heartbeat, productivity information, screenshot content, OCR, findings, detected values, filenames, reports, or arbitrary metadata.
+
+## Manual M4 Console validation still required
+
+1. Sign in to the Agent and confirm the correct workspace, role, and Team Policy version.
+2. Capture a screenshot containing synthetic sensitive data.
+3. Complete Protect & Verify successfully.
+4. Open Console Activity and confirm exactly one Screenshot verified event appears with the correct policy version.
+5. Confirm the event contains no screenshot details, findings, categories, values, filenames, or device identity.
+6. Select Approve & Copy and confirm the protected image reaches the clipboard.
+7. Refresh Console Activity and confirm exactly one Screenshot approved event appears with the same authorizing policy version.
+8. Reopen the Agent window and repeat rendering actions without creating duplicate events.
+9. Cause a fresh verification failure and confirm no successful verified event is recorded for that attempt.
+10. Cause a clipboard write failure and confirm no approved event is recorded.
+11. Change Team Policy before approval and confirm stale approval remains unavailable and no stale-version approval event is written.
+12. During the same authenticated run, disconnect the network with a valid same-workspace cached policy and complete a safe local workflow.
+13. Confirm local protection remains usable and the Agent reports that workspace activity could not be updated.
+14. Confirm no offline activity queue or later automatic replay occurs.
+15. Inspect Supabase network requests. Activity requests should contain workspace ID, canonical event type, Team Policy version, SINGLE workflow, Team Policy context, required statuses, and zero counts.
+16. Confirm request payloads contain no image/blob/base64 data, OCR, findings, descriptions, detected values, geometry, filenames, reports, or device identifiers.
+
+M3 offline cached-policy, sign-out cleanup, and manual network privacy validation remain pending and must be completed alongside the M4 checks.
+
+## Windows Pilot Build
+
+SafeShare Agent 0.1.0 can be packaged as a current-user Windows NSIS installer. This is a private SafeShare Windows Pilot Build, not a production or enterprise release.
+
+### Build configuration
+
+- Product and window name: SafeShare Agent
+- Stable neutral application identifier: app.safeshare.agent
+- Version: 0.1.0
+- Installer: NSIS current-user installation
+- WebView2: download bootstrapper when the runtime is missing
+- Startup: off and not implemented
+- Single instance: official Tauri plugin; a second launch shows and focuses the existing Agent
+- Signing: no certificate is configured, so pilot artifacts are unsigned
+
+The existing repository-owned development icon remains in use. Final branding is pending.
+
+### Production Supabase configuration
+
+Vite substitutes VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY at build time. The installed application does not read the developer's .env.local file at runtime.
+
+For a pilot release, provide only the public Supabase project URL and publishable/anonymous client key in the controlled build environment or ignored .env.production.local file. Never provide a service-role key, database password, developer credentials, signing private key, or test-user password.
+
+Because these client-safe values are compiled into frontend assets, changing them requires rebuilding the Agent.
+
+### Build and artifact command
+
+Run the existing validation commands, then:
+
+    cd D:\SafeShare\agent
+    npm run build:pilot
+
+The pilot build wrapper remaps local developer paths from Rust release metadata. Tauri embeds the production frontend and packaged local OCR assets into the application and creates the configured NSIS setup executable. Generated dist, target, OCR copies, executable, and installer artifacts remain ignored.
+
+### Installed behavior
+
+The installed Agent starts as a discoverable tray application. Closing its window hides it without terminating clipboard protection. The tray can open the Agent or current review. Explicit Quit terminates the process.
+
+Screenshot pixels, clipboard bytes, OCR, findings, protected output, and verification remain local. The safe Team Policy cache remains the only application data file intentionally written by SafeShare code. M4 Console activity contains only the minimal workspace, canonical workflow event, policy version, fixed statuses, and zero screenshot-derived counts.
+
+The application does not register itself to start with Windows. Autostart remains pending until a visible opt-in setting and uninstall lifecycle can be implemented and manually tested.
+
+See ../docs/WINDOWS_PILOT_INSTALL.md for installation, use, uninstall, privacy, and unsigned-pilot guidance.

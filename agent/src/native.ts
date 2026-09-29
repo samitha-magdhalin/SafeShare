@@ -9,6 +9,9 @@ export type NativeBridge = {
   notify(): Promise<void>;
   setReviewAvailable(available: boolean): Promise<void>;
   hideReviewWindow(): Promise<void>;
+  readPolicyCache(): Promise<string | null>;
+  writePolicyCache(serialized: string): Promise<void>;
+  setCompanyStatus(workspace: string | null, policyVersion: number | null, offline: boolean): Promise<void>;
 };
 
 export const tauriBridge: NativeBridge = {
@@ -19,4 +22,7 @@ export const tauriBridge: NativeBridge = {
   notify: () => invoke('show_attention_notification'),
   setReviewAvailable: available => invoke('set_review_available', { available }),
   hideReviewWindow: () => invoke('hide_review_window'),
+  readPolicyCache: () => invoke('read_team_policy_cache'),
+  writePolicyCache: serialized => invoke('write_team_policy_cache', { serialized }),
+  setCompanyStatus: (workspace, policyVersion, offline) => invoke('set_company_status', { workspace, policyVersion, offline }),
 };

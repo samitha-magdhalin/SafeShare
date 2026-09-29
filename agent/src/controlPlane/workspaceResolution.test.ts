@@ -1,0 +1,4 @@
+import { describe,expect,it } from 'vitest';
+import { resolveWorkspaceSelection } from './workspaceResolution';
+const first={id:'a',name:'A',role:'member' as const},second={id:'b',name:'B',role:'admin' as const};
+describe('workspace resolution',()=>{it('reports zero workspace without creating one',()=>expect(resolveWorkspaceSelection([])).toEqual({kind:'none'}));it('auto-selects exactly one workspace',()=>expect(resolveWorkspaceSelection([first])).toEqual({kind:'selected',workspace:first}));it('requires selection when multiple workspaces are accessible',()=>expect(resolveWorkspaceSelection([first,second])).toEqual({kind:'choose',workspaces:[first,second]}))});

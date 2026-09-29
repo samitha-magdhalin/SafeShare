@@ -1,1 +1,48 @@
-{"$schema":"https://schema.tauri.app/config/2","productName":"SafeShare Agent","version":"0.1.0","identifier":"app.safeshare.agent","build":{"beforeDevCommand":"npm run dev","devUrl":"http://localhost:1420","beforeBuildCommand":"npm run build","frontendDist":"../dist"},"app":{"windows":[{"label":"main","title":"SafeShare Agent","width":520,"height":240,"visible":false}],"security":{"csp":"default-src 'self'; img-src 'self' blob: data:; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost"}},"bundle":{"active":false,"targets":"all","icon":["icons/icon.ico","icons/icon.png"]}}
+{
+    "$schema":  "https://schema.tauri.app/config/2",
+    "productName":  "SafeShare Agent",
+    "version":  "0.1.0",
+    "identifier":  "app.safeshare.agent",
+    "build":  {
+                  "beforeDevCommand":  "npm run dev",
+                  "devUrl":  "http://localhost:1420",
+                  "beforeBuildCommand":  "npm run build",
+                  "frontendDist":  "../dist"
+              },
+    "app":  {
+                "windows":  [
+                                {
+                                    "label":  "main",
+                                    "title":  "SafeShare Agent",
+                                    "width":  960,
+                                    "height":  720,
+                                    "visible":  false,
+                                    "backgroundColor":  "#f4f8f6"
+                                }
+                            ],
+                "security":  {
+                                 "csp":  "default-src \u0027self\u0027; img-src \u0027self\u0027 blob: data:; worker-src \u0027self\u0027 blob:; script-src \u0027self\u0027 \u0027wasm-unsafe-eval\u0027; connect-src \u0027self\u0027 ipc: http://ipc.localhost https://*.supabase.co"
+                             }
+            },
+    "bundle":  {
+                   "active":  true,
+                   "targets":  [
+                                   "nsis"
+                               ],
+                   "publisher":  "SafeShare",
+                   "shortDescription":  "SafeShare Windows Pilot Agent",
+                   "icon":  [
+                                "icons/icon.ico",
+                                "icons/icon.png"
+                            ],
+                   "windows":  {
+                                   "webviewInstallMode":  {
+                                                              "type":  "downloadBootstrapper",
+                                                              "silent":  true
+                                                          },
+                                   "nsis":  {
+                                                "installMode":  "currentUser"
+                                            }
+                               }
+               }
+}

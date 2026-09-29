@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot,type Root } from 'react-dom/client';
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
@@ -20,5 +20,5 @@ describe('invitation management UI',()=>{
 });
 
 describe('invitation authentication redirect',()=>{
- it('uses the invite route for signup confirmation without changing the default flow',async()=>{const signUp=vi.fn().mockResolvedValue({data:{session:null},error:null}),container=document.createElement('div'),root=createRoot(container);roots.push(root);await act(async()=>root.render(<AuthForm client={{auth:{signUp}} as never} mode="signup" emailRedirectTo="https://safe.example/invite/token" onNavigate={()=>{}}/>));const inputs=container.querySelectorAll('input');setValue(inputs[0],'Pilot');setValue(inputs[1],'pilot@example.com');setValue(inputs[2],'password123');await act(async()=>{(container.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await Promise.resolve()});expect(signUp).toHaveBeenCalledWith(expect.objectContaining({options:expect.objectContaining({emailRedirectTo:'https://safe.example/invite/token'})}))});
+ it('uses the invite route for signup confirmation without changing the default flow',async()=>{const signUp=vi.fn().mockResolvedValue({data:{session:null},error:null}),container=document.createElement('div'),root=createRoot(container);roots.push(root);await act(async()=>root.render(<AuthForm client={{auth:{signUp}} as never} mode="signup" invitationToken={token} onNavigate={()=>{}}/>));const inputs=container.querySelectorAll('input');setValue(inputs[0],'Pilot');setValue(inputs[1],'pilot@example.com');setValue(inputs[2],'password123');await act(async()=>{(container.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await Promise.resolve()});expect(signUp).toHaveBeenCalledWith(expect.objectContaining({options:expect.objectContaining({emailRedirectTo:window.location.origin+'/invite/'+token})}))});
 });

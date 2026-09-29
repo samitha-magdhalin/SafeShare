@@ -46,7 +46,7 @@ export default function SaaSApp(){
   useEffect(()=>{
     if(!client||!session||inviteToken){if(!inviteToken)setWorkspace(null);return}
     let active=true;setWorkspaceLoading(true);setWorkspaceError('');
-    loadWorkspace(client).then(value=>{if(active)setWorkspace(value)}).catch(()=>{if(active)setWorkspaceError('Workspace could not be loaded.')}).finally(()=>{if(active)setWorkspaceLoading(false)});
+    loadWorkspace(client,session.user.id).then(value=>{if(active)setWorkspace(value)}).catch(()=>{if(active)setWorkspaceError('Workspace could not be loaded.')}).finally(()=>{if(active)setWorkspaceLoading(false)});
     return()=>{active=false};
   },[client,session,inviteToken]);
   useEffect(()=>{if(!client||!workspace){setTeamPolicy(null);return}let active=true;setPolicyLoading(true);setPolicyError('');loadWorkspacePolicy(client,workspace.id).then(value=>{if(active)setTeamPolicy(value)}).catch(()=>{if(active)setPolicyError('The required team policy could not be loaded. Sharing authorization is disabled.')}).finally(()=>{if(active)setPolicyLoading(false)});return()=>{active=false}},[client,workspace]);
@@ -54,7 +54,7 @@ export default function SaaSApp(){
   if(checking)return <main className="state-page">Checking session...</main>;
   if(path.startsWith('/invite/')&&!inviteToken)return <main className="state-page"><section className="auth-card"><h1>Invalid invite link</h1><div className="auth-message" role="alert">This invite link is invalid.</div></section></main>;
   if(!session){if(inviteToken)return <InvitationAccess client={client} token={inviteToken}/>;if(path==='/login')return <AuthForm client={client} mode="signin" onNavigate={navigate}/>;if(path==='/signup')return <AuthForm client={client} mode="signup" onNavigate={navigate}/>;return <Landing/>}
-  if(inviteToken)return <InvitationAcceptance client={client} token={inviteToken} onAccepted={joined=>{setWorkspace(joined);navigate('/')}}/>;
+  if(inviteToken)return <InvitationAcceptance client={client} token={inviteToken} onAccepted={setWorkspace} onContinue={()=>navigate('/')}/>;
   if(workspaceLoading)return <main className="state-page">Loading workspace...</main>;
   if(workspaceError)return <main className="state-page"><div className="auth-message" role="alert">{workspaceError}</div></main>;
   if(!workspace)return <WorkspaceOnboarding client={client} onCreated={setWorkspace}/>;

@@ -1,0 +1,5 @@
+import { describe,expect,it,vi } from 'vitest';
+import { PROFILES } from '../../../src/policy/profiles';
+import { NativePolicyCache } from './policyCache';
+
+describe('policy cache privacy boundary',()=>{it('serializes policy metadata only',async()=>{const writePolicyCache=vi.fn<(serialized:string)=>Promise<void>>(async()=>undefined),store=new NativePolicyCache({readPolicyCache:async()=>null,writePolicyCache});await store.write({workspaceId:'workspace-a',workspaceName:'Workspace A',version:2,policy:PROFILES.client.policy,fetchedAt:'2026-09-28T00:00:00.000Z'});const payload=JSON.parse(writePolicyCache.mock.calls[0][0]);expect(Object.keys(payload)).toEqual(['workspaceId','workspaceName','version','policy','fetchedAt']);expect(JSON.stringify(payload)).not.toMatch(/image|ocr|finding|description|masked|credential value|blob|report/i)});it('treats invalid JSON as no cache',async()=>{const store=new NativePolicyCache({readPolicyCache:async()=>'{bad',writePolicyCache:async()=>undefined});await expect(store.read()).resolves.toBeNull()})});
