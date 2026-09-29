@@ -1,0 +1,17 @@
+// @vitest-environment jsdom
+import {act} from 'react';
+import {createRoot,type Root} from 'react-dom/client';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {afterEach,describe,expect,it,vi} from 'vitest';
+import {PublicSite} from '../app/PublicSite';
+const mounted:{root:Root;container:HTMLDivElement}[]=[];
+async function render(){const container=document.createElement('div');document.body.append(container);const root=createRoot(container);mounted.push({root,container});const onNavigate=vi.fn();await act(async()=>root.render(<PublicSite onNavigate={onNavigate}/>));return{container,onNavigate}}
+describe('public SafeShare website',()=>{
+ afterEach(async()=>{for(const item of mounted.splice(0))await act(async()=>item.root.unmount());document.body.textContent=''});
+ it('presents the approved product positioning at the public root',async()=>{const{container}=await render();expect(container.querySelector('h1')?.textContent).toBe('Stop sensitive screenshots before they leave your company.');expect(container.textContent).toContain('SafeShare Agent');expect(container.textContent).toContain('Team Policy + Console');expect(container.textContent).toContain('Web Scanner');expect(container.textContent).toContain('Company-managed Team Policy');expect(container.textContent).toContain('Team Policy determines how findings are handled.');expect(container.textContent).toContain('Currently available through controlled Windows private pilots.');expect(container.textContent).toContain('Pilot access and Windows Agent deployment are coordinated directly with each participating team.');expect(container.textContent).not.toContain('The current Windows installer is unsigned')});
+ it('provides a zero-cost private-pilot contact action without a backend form',async()=>{const{container}=await render();const pilot=[...container.querySelectorAll('a')].filter(link=>link.textContent==='Start Private Pilot');expect(pilot.length).toBeGreaterThanOrEqual(2);expect(pilot.every(link=>link.getAttribute('href')?.startsWith('mailto:?subject=SafeShare'))).toBe(true);expect(container.querySelector('form')).toBeNull()});
+ it('links to the workflow and explains local privacy boundaries and limits',async()=>{const{container}=await render();expect(container.querySelector('a[href="#how"]')?.textContent).toBe('How it works');for(const step of ['CAPTURE','CHECK','PROTECT','VERIFY','SHARE'])expect(container.textContent).toContain(step);expect(container.textContent).toContain("Screenshot processing stays on the employee's device.");expect(container.textContent).toContain('does not guarantee every sensitive item will be found');expect(container.textContent).not.toMatch(/100% secure|guaranteed detection|DPDP compliant|GDPR compliant/i)});
+ it('routes Company Sign In through the existing application navigation',async()=>{const{container,onNavigate}=await render();const signIn=[...container.querySelectorAll('button')].find(button=>button.textContent==='Company Sign In')!;await act(async()=>signIn.click());expect(onNavigate).toHaveBeenCalledWith('/login')});
+ it('preserves public, login, signup, invitation and authenticated route branches',()=>{const source=readFileSync(join(process.cwd(),'src','app','SaaSApp.tsx'),'utf8');expect(source).toContain("if(path==='/login')");expect(source).toContain("if(path==='/signup')");expect(source).toContain("path.match(/^\\/invite\\/([0-9a-f]{64})$/)");expect(source).toContain('return <PublicSite onNavigate={navigate}/>');expect(source).toContain('return <Shell client={client}')});
+});
