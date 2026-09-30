@@ -1,5 +1,9 @@
 import type { Box, Finding } from '../types';
 
+export type ProtectionCoverage={required:number;applied:number;complete:boolean;requiredFindingIds:string[];appliedFindingIds:string[]};
+export type ProtectionResult={blob:Blob;coverage:ProtectionCoverage};
+export class ProtectionCoverageError extends Error{constructor(public readonly coverage:ProtectionCoverage){super('REQUIRED_PROTECTION_GEOMETRY');this.name='ProtectionCoverageError'}}
+
 export async function loadImage(blob: Blob): Promise<ImageBitmap> { return createImageBitmap(blob); }
 export function canvasFromImage(image: ImageBitmap): HTMLCanvasElement {
   const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
@@ -32,14 +36,25 @@ export function sampleBackground(data: Uint8ClampedArray, imageWidth: number, im
   return consistent?`rgb(${median[0]}, ${median[1]}, ${median[2]})`:null;
 }
 
-export async function protect(image: ImageBitmap, findings: Finding[]): Promise<Blob> {
-  const canvas=canvasFromImage(image),ctx=canvas.getContext('2d')!;
-  const original=ctx.getImageData(0,0,image.width,image.height);
-  for(const finding of findings.filter(item=>item.selected&&item.box)) {
-    const rect=protectionRect(finding.box as Box,image.width,image.height);
-    if(!rect)continue;
-    ctx.fillStyle=sampleBackground(original.data,image.width,image.height,rect)??'#202b37';
-    ctx.fillRect(rect.x,rect.y,rect.width,rect.height);
+type ProtectionApplication={finding:Finding;rect?:Box};
+export function planProtection(findings:Finding[],imageWidth:number,imageHeight:number):{applications:ProtectionApplication[];coverage:ProtectionCoverage}{
+  const required=findings.filter(finding=>finding.selected),applications:ProtectionApplication[]=[];
+  for(const finding of required){
+    if(finding.source==='metadata'){applications.push({finding});continue;}
+    const box=finding.box;
+    const valid=!!box&&[box.x,box.y,box.width,box.height].every(Number.isFinite)&&box.x>=0&&box.y>=0&&box.width>0&&box.height>0&&box.x+box.width<=imageWidth&&box.y+box.height<=imageHeight;
+    const rect=valid?protectionRect(box!,imageWidth,imageHeight):undefined;
+    if(!rect)throw new ProtectionCoverageError({required:required.length,applied:applications.length,complete:false,requiredFindingIds:required.map(item=>item.id),appliedFindingIds:applications.map(item=>item.finding.id)});
+    applications.push({finding,rect});
   }
-  return toBlob(canvas);
+  return{applications,coverage:{required:required.length,applied:applications.length,complete:applications.length===required.length,requiredFindingIds:required.map(item=>item.id),appliedFindingIds:applications.map(item=>item.finding.id)}};
+}
+export async function protect(image: ImageBitmap, findings: Finding[]): Promise<ProtectionResult> {
+  const{applications,coverage}=planProtection(findings,image.width,image.height),canvas=canvasFromImage(image),ctx=canvas.getContext('2d')!,original=ctx.getImageData(0,0,image.width,image.height);
+  for(const application of applications){
+    if(!application.rect)continue;
+    ctx.fillStyle=sampleBackground(original.data,image.width,image.height,application.rect)??'#202b37';
+    ctx.fillRect(application.rect.x,application.rect.y,application.rect.width,application.rect.height);
+  }
+  return{blob:await toBlob(canvas),coverage};
 }

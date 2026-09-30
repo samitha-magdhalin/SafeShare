@@ -39,7 +39,7 @@ describe('detection',()=>{
   it('keeps fresh verification strict for a fragmented email remainder',()=>{
     const {findings}=emailGeometry(['CUSTOMER_EMAIL=ananya.demo','@example','.com'],[1,1]);
     expect(verifyImage(findings,detectText('CUSTOMER_EMAIL=demo@example.com')).ready).toBe(false);
-    expect(verifyImage(findings,detectText('CUSTOMER_EMAIL=')).ready).toBe(true);
+    expect(verifyImage(findings,detectText('CUSTOMER_EMAIL='),undefined,{required:1,applied:1,complete:true,requiredFindingIds:[findings[0].id],appliedFindingIds:[findings[0].id]}).ready).toBe(true);
   });
   it('detects Indian numbers and rejects short numbers',()=>{expect(detectText('+91 9876543210')[0].type).toBe('Phone');expect(detectText('12345')).toHaveLength(0);expect(mask('Phone','9876543210')).toBe('••••••3210')});
   it('classifies valid private addresses',()=>{expect(isPrivateIp('192.168.1.25')).toBe(true);expect(isPrivateIp('8.8.8.8')).toBe(false);expect(detectText('999.999.1.1')).toHaveLength(0);expect(detectText('192.168.1.25')[0].severity).toBe('SENSITIVE')});
@@ -70,6 +70,8 @@ describe('detection',()=>{
     ['overlapping OCR fragment boxes',['API_KEY=skte','stsaf','eshare_8H2K9M4P7Q','STATUS'],[-30,1,20]],
     ['three connector-separated OCR fragments',['API_KEY=sk_','test_','safeshare_8H2K9M4P7Q','STATUS'],[2,2,20]],
     ['one long underscore-separated OCR word',['API_KEY=sk_test_safe_share_long_token_8H2K9M4P7Q','STATUS'],[20]],
+    ['underscore-sized OCR gap',['API_KEY=sk_','test_','safeshare_8H2K9M4P7Q','STATUS'],[12,12,12]],
+    ['punctuation-sized OCR gap',['API_KEY=sk_test_','safeshare_8H2K9M4P7Q','STATUS'],[14,14]],
     ['connector before a spatially separate neighbor',['API_KEY=sk_test_','STATUS'],[20]]
   ])('covers the complete credential for %s and excludes neighboring text',(_name,fragments,gaps)=>{
     const {credential,words,findings}=credentialGeometry(fragments as string[],gaps as number[]);
@@ -83,10 +85,14 @@ describe('detection',()=>{
     expect(rect.x).toBeGreaterThan(80);
     expect(rect.x+rect.width).toBeLessThan(neighbor.box.x);
   });
-  it('uses a credential-only conservative fallback for an ambiguous nearby OCR word',()=>{
+  it('does not merge an unrelated nearby OCR word into credential geometry',()=>{
     const {credential,words}=credentialGeometry(['API_KEY=sk_test_value','CONTEXT'],[8]);
     const context=words[1];
-    expect(credential.box!.x+credential.box!.width).toBe(context.box.x+context.box.width);
+    expect(credential.box!.x+credential.box!.width).toBeLessThan(context.box.x);
+  });
+  it('does not merge an unrelated uppercase label across a punctuation-sized gap',()=>{
+    const {credential,words}=credentialGeometry(['API_KEY=sk_test_value','STATUS'],[12]);
+    expect(credential.box!.x+credential.box!.width).toBe(words[0].box.x+words[0].box.width);
   });
   it('stops conservative credential geometry at another key/value field even with a tiny gap',()=>{
     const {credential,words}=credentialGeometry(['API_KEY=sk_test_value','NEXT_FIELD=value'],[2]);
@@ -105,7 +111,7 @@ describe('detection',()=>{
   it('keeps strict fresh verification for partial and complete credential removal',()=>{
     const {findings}=credentialGeometry(['API_KEY=skte','stsaf','eshare_8H2K9M4P7Q','STATUS'],[1,1,20]);
     expect(verifyImage(findings,detectText('API_KEY=safeshare_8H2K9M4P7Q')).ready).toBe(false);
-    expect(verifyImage(findings,detectText('API_KEY=')).ready).toBe(true);
+    expect(verifyImage(findings,detectText('API_KEY='),undefined,{required:1,applied:1,complete:true,requiredFindingIds:[findings[0].id],appliedFindingIds:[findings[0].id]}).ready).toBe(true);
   });
   it('samples a uniform local background and rejects mixed surroundings',()=>{
     const data=new Uint8ClampedArray(40*40*4);

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Finding } from '../types';
 import type { Policy } from '../policy/types';
 const controls=vi.hoisted(()=>({scan:vi.fn(),protectedBlob:new Blob(['protected'],{type:'image/png'})}));
-vi.mock('../utils/image',()=>({loadImage:vi.fn(async()=>({width:640,height:360,close:vi.fn()})),protect:vi.fn(async()=>controls.protectedBlob)}));
+vi.mock('../utils/image',()=>({loadImage:vi.fn(async()=>({width:640,height:360,close:vi.fn()})),protect:vi.fn(async()=>({blob:controls.protectedBlob,coverage:{required:1,applied:1,complete:true,requiredFindingIds:['internal'],appliedFindingIds:['internal']}}))}));
 vi.mock('../detection/scan',()=>({scan:controls.scan,logDevelopmentScanError:vi.fn(),ScanError:class ScanError extends Error{}}));
 import App from '../App';
 import { Shell } from '../app/SaaSApp';

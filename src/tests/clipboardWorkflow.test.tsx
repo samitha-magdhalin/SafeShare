@@ -12,7 +12,7 @@ const controls = vi.hoisted(() => ({
 
 vi.mock('../utils/image', () => ({
   loadImage: vi.fn(async () => ({ width: 640, height: 360, close: vi.fn() })),
-  protect: vi.fn(async () => controls.protectedBlob),
+  protect: vi.fn(async () => ({blob:controls.protectedBlob,coverage:{required:1,applied:1,complete:true,requiredFindingIds:['text-0'],appliedFindingIds:['text-0']}})),
 }));
 vi.mock('../detection/scan', () => ({
   scan: controls.scan,

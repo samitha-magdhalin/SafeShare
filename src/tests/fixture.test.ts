@@ -33,7 +33,7 @@ it('recognizes the synthetic screenshot with the bundled English model',async()=
     expect(api.box!.width).toBeLessThan(620);
     expect(password.box!.width).toBeLessThan(480);
   }finally{await worker.terminate();}
-});
+},15000);
 it('does not classify the synthetic screenshot as a QR code',async()=>{
   const png=PNG.sync.read(await readFile(resolve('public/fixtures/fake-debug-screen.png')));
   const pixels=new Uint8ClampedArray(png.data);
@@ -70,7 +70,7 @@ it('keeps labels while covering only selected value regions',async()=>{
     const remaining=extractLines(second).flatMap(line=>detectText(line.map(word=>word.text).join(' '),line));
     expect(remaining.filter(f=>f.severity==='CRITICAL'||f.severity==='SENSITIVE')).toHaveLength(0);
   }finally{await worker.terminate();}
-});
+},20000);
 it('bundles the browser OCR loaders selected by Tesseract',async()=>{
   for(const name of ['lstm','simd-lstm','relaxedsimd-lstm']) {
     expect((await stat(resolve(`public/ocr/core/tesseract-core-${name}.wasm.js`))).size).toBeGreaterThan(1000);

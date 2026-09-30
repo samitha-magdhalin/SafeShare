@@ -46,7 +46,7 @@ describe('realistic credential contexts',()=>{
   });
   it('allows informational URLs after selected secrets are removed',()=>{
     const original=detectText('PASSWORD=fakePassword123');
-    const report=verifyImage(original,detectText('https://example.com'));
+    const report=verifyImage(original,detectText('https://example.com'),undefined,{required:1,applied:1,complete:true,requiredFindingIds:[original[0].id],appliedFindingIds:[original[0].id]});
     expect(report.ready).toBe(true);expect(report.reviewCount).toBe(0);
   });
 });

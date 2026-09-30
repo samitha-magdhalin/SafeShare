@@ -98,6 +98,17 @@ function reconstructedEmails(words:PositionedWord[]):Match[]{
   }
   return matches;
 }
+function credentialWordsContinuous(left:PositionedWord,right:PositionedWord):boolean{
+  if(spatiallyContinuous(left.start,left.end,right.start,right.end,[left,right]))return true;
+  const verticalOverlap=Math.min(left.box.y+left.box.height,right.box.y+right.box.height)-Math.max(left.box.y,right.box.y);
+  const minimumHeight=Math.min(left.box.height,right.box.height);
+  if(verticalOverlap<minimumHeight*.5)return false;
+  if(/^[|;,]+$/.test(right.text)||/^[A-Z]{2,}$/.test(right.text))return false;
+  const gap=right.box.x-(left.box.x+left.box.width);
+  const characterWidth=Math.max(left.box.width/Math.max(1,left.text.length),right.box.width/Math.max(1,right.text.length));
+  const punctuationGap=Math.max(4,Math.min(minimumHeight*1.25,characterWidth*1.5));
+  return gap>=-characterWidth&&gap<=punctuationGap&&/^[A-Za-z0-9._~+/-]{2,}$/.test(right.text);
+}
 function beginsIndependentField(index:number,words:PositionedWord[]):boolean{
   const lookahead=words.slice(index,index+3).map(word=>word.text).join('');
   return /^[A-Za-z][A-Za-z0-9_-]{1,40}\s*[:=]/.test(lookahead);
@@ -111,12 +122,9 @@ function credentialProtectionEnd(valueStart:number,detectedEnd:number,words:Posi
   for(let index=lastIndex+1;index<words.length;index++){
     const previous=words[index-1],current=words[index];
     if(beginsIndependentField(index,words)||/^[|;,]+$/.test(current.text))break;
-    const verticalOverlap=Math.min(previous.box.y+previous.box.height,current.box.y+current.box.height)-Math.max(previous.box.y,current.box.y);
-    if(verticalOverlap<Math.min(previous.box.height,current.box.height)*.35)break;
-    const gap=current.box.x-(previous.box.x+previous.box.width);
-    const characterWidth=Math.max(previous.box.width/Math.max(1,previous.text.length),current.box.width/Math.max(1,current.text.length));
-    const maximumRunGap=Math.max(4,Math.min(Math.min(previous.box.height,current.box.height)*.9,characterWidth*1.25));
-    if(gap>maximumRunGap)break;
+
+    if(!credentialWordsContinuous(previous,current))break;
+
     end=current.end;
   }
   return end;
@@ -129,8 +137,10 @@ function credentialValue(raw:string,start:number,words:PositionedWord[]):string{
     const currentWordIndex=words.findIndex(word=>word.end>current.start&&word.start<current.end);
     if(currentWordIndex>=0&&beginsIndependentField(currentWordIndex,words))break;
     const connectorSplit=/[_./-]$/.test(previous.text);
-    const continues=words.length>0
-      ? spatiallyContinuous(previous.start,previous.end,current.start,current.end,words)
+    const previousWord=words.find(word=>word.end>previous.start&&word.start<previous.end);
+    const currentWord=words.find(word=>word.end>current.start&&word.start<current.end);
+    const continues=previousWord&&currentWord
+      ? credentialWordsContinuous(previousWord,currentWord)
       : connectorSplit;
     if(!continues)break;
     count++;

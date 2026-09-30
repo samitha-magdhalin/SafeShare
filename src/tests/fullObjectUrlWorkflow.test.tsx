@@ -3,9 +3,11 @@ import { StrictMode, act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 
+const controls=vi.hoisted(()=>({protectedBlob:new Blob(['protected'],{type:'image/png'})}));
+
 vi.mock('../utils/image', () => ({
   loadImage: vi.fn(async () => ({ width: 640, height: 360, close: vi.fn() })),
-  protect: vi.fn(async () => new Blob(['protected'], { type: 'image/png' })),
+  protect: vi.fn(async () => ({ blob: controls.protectedBlob, coverage: { required: 1, applied: 1, complete: true, requiredFindingIds: ['password'], appliedFindingIds: ['password'] } })),
 }));
 vi.mock('../detection/scan', () => ({
   scan: vi.fn().mockResolvedValueOnce({ findings: [{id:'password',type:'Password',category:'secret',severity:'CRITICAL',confidence:99,maskedPreview:'P...',source:'ocr',description:'credential',selected:true,box:{x:1,y:1,width:10,height:10}}], textFindings: [], metadataCount: 0 }).mockResolvedValue({ findings: [], textFindings: [], metadataCount: 0 }),
@@ -62,6 +64,11 @@ describe('complete image URL workflow in StrictMode', () => {
       expect(active.has(this.href)).toBe(true);
       expect(this.download).toMatch(/\.png$/);
     });
+    class TestClipboardItem{constructor(public readonly data:Record<string,Blob>){} }
+    let clipboardItems:TestClipboardItem[]=[];
+    const clipboardWrite=vi.fn(async(items:TestClipboardItem[])=>{clipboardItems=items});
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:clipboardWrite}});
+    Object.defineProperty(globalThis,'ClipboardItem',{configurable:true,value:TestClipboardItem});
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -82,6 +89,8 @@ describe('complete image URL workflow in StrictMode', () => {
       expect(container.textContent).toContain('Awaiting review');
       await click('Approve & Copy');
       expect(container.textContent).toContain('Ready to Share');
+      expect(clipboardWrite).toHaveBeenCalledOnce();
+      expect(clipboardItems[0]!.data['image/png']).toBe(controls.protectedBlob);
       await click('Export protected image');
       expect(download).toHaveBeenCalledOnce();
       expect(active.has(protectedUrl!)).toBe(true);

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Finding } from '../types';
 
-const controls=vi.hoisted(()=>({scan:vi.fn(),protect:vi.fn(async()=>new Blob(['protected'],{type:'image/png'}))}));
+const controls=vi.hoisted(()=>({scan:vi.fn(),protect:vi.fn(async()=>({blob:new Blob(['protected'],{type:'image/png'}),coverage:{required:1,applied:1,complete:true,requiredFindingIds:['password','internal'],appliedFindingIds:['password','internal']}}))}));
 vi.mock('../utils/image',()=>({loadImage:vi.fn(async()=>({width:640,height:360,close:vi.fn()})),protect:controls.protect}));
 vi.mock('../detection/scan',()=>({scan:controls.scan,logDevelopmentScanError:vi.fn(),ScanError:class ScanError extends Error{}}));
 import App from '../App';
