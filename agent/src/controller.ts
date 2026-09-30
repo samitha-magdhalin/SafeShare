@@ -1,6 +1,6 @@
 import { scan } from '../../src/detection/scan';
 import { applyPolicy } from '../../src/policy/evaluatePolicy';
-import { ImageEventDeduplicator, fingerprintImage } from './deduplicate';
+import { ImageEventDeduplicator, fingerprintVisualImage } from './deduplicate';
 import { type AgentLogger, developmentLogger } from './privacyLog';
 import type { NativeBridge } from './native';
 import type { ReviewCandidate } from './reviewState';
@@ -18,6 +18,7 @@ export class ClipboardScanController {
     private readonly getPolicy: PolicyProvider,
     private readonly onAttention: (candidate: ReviewCandidate) => void = () => undefined,
     private readonly logger: AgentLogger = developmentLogger,
+    private readonly visualFingerprint: (bytes:Uint8Array)=>Promise<string> = fingerprintVisualImage,
   ) {}
   async start(): Promise<() => void> { return this.bridge.listenForImages(() => { void this.enqueue(); }); }
   suppressOwnWrite(fingerprint: string): void { this.suppressedWrites.add(fingerprint); }
@@ -38,7 +39,8 @@ export class ClipboardScanController {
     catch { this.logger({ event: 'scan failed', errorCategory: 'clipboard-read' }); return; }
     if (!values?.length) return;
     const bytes = Uint8Array.from(values);
-    const fingerprint = await fingerprintImage(bytes);
+    let fingerprint:string;
+    try{fingerprint=await this.visualFingerprint(bytes)}catch{bytes.fill(0);this.logger({event:'scan failed',errorCategory:'image-decode'});return;}
     if (this.suppressedWrites.delete(fingerprint)) { this.deduplicator.accept(fingerprint); bytes.fill(0); return; }
     if (!this.deduplicator.isLatest(generation) || !this.deduplicator.accept(fingerprint)) { bytes.fill(0); return; }
     this.logger({ event: 'clipboard image detected' });this.logger({ event: 'scan started' });

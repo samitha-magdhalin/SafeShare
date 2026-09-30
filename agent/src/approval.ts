@@ -1,4 +1,4 @@
-import { fingerprintImage } from './deduplicate';
+import { fingerprintImage, fingerprintVisualImage } from './deduplicate';
 import { approveExact, canApprove, revokeApproval, type ReviewState } from './reviewState';
 
 export type ApprovalWriter = {
@@ -7,16 +7,18 @@ export type ApprovalWriter = {
   write(bytes: Uint8Array): Promise<void>;
 };
 
-export async function approveAndWriteExact(state: ReviewState, writer: ApprovalWriter): Promise<{ state: ReviewState; copied: boolean }> {
+export async function approveAndWriteExact(state: ReviewState, writer: ApprovalWriter, visualFingerprint:(bytes:Uint8Array)=>Promise<string>=fingerprintVisualImage): Promise<{ state: ReviewState; copied: boolean }> {
   if (!canApprove(state) || !state.protected) return { state, copied: false };
   const fingerprint = await fingerprintImage(state.protected.bytes);
   if (fingerprint !== state.protected.fingerprint) return { state: revokeApproval(state), copied: false };
-  writer.suppress(fingerprint);
+  let clipboardFingerprint:string;
+  try{clipboardFingerprint=await visualFingerprint(state.protected.bytes)}catch{return {state:revokeApproval(state),copied:false}}
+  writer.suppress(clipboardFingerprint);
   try {
     await writer.write(state.protected.bytes);
     return { state: approveExact(state, fingerprint), copied: true };
   } catch {
-    writer.clearSuppression(fingerprint);
+    writer.clearSuppression(clipboardFingerprint);
     return { state: revokeApproval(state), copied: false };
   }
 }
