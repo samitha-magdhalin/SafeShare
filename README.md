@@ -21,6 +21,8 @@ Open the local URL printed by Vite. For production: `npm run build`; for detecto
 
 ## Demo
 
+Live Demo link - https://safeshare-henna.vercel.app/
+
 Open `public/fixtures/fake-debug-screen.png` in the scanner. It contains **fake data only**: an email, Indian phone number, internal URL and IP, fake API key, and fake password. The additional `fake-vscode-dark.png` and `fake-terminal-dark.png` fixtures contain more credential formats. Scan, choose **Protect & verify**, review the output, and export. Ordinary public URLs are informational and are excluded from **Protect all**. OCR quality can vary by browser and display resolution.
 
 ## Current limits
