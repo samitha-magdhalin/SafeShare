@@ -12,7 +12,7 @@ export function mask(type:string,value:string):string {
   if(type==='PAN')return '••••••••••';
   if(type==='UPI ID')return `••••@${value.split('@').pop()}`;
   if(type==='Database Connection String')return `${value.split(':')[0]}://••••`;
-  if(['API Key','API Token','Access Token','Bearer Token','Password','AWS Access Key','AWS Secret Access Key','Secret','Generic Credential'].includes(type))return `${value.slice(0,Math.min(4,value.length))}••••${value.slice(-2)}`;
+  if(['API Key','API Token','Access Token','Bearer Token','Password','AWS Access Key','AWS Secret Access Key','Secret','Generic Credential','Credential-bearing URL'].includes(type))return value.length<12?'••••••':`${value.slice(0,2)}••••${value.slice(-2)}`;
   if(type==='Internal IP')return value.replace(/\.\d+$/,'.•••');
   if(type==='Internal URL'||type==='Public URL'){try{const url=new URL(value);return `${url.protocol}//${url.hostname}/…`;}catch{return 'URL detected';}}
   return 'Content hidden';

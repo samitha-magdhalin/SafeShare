@@ -70,4 +70,9 @@ describe('standalone secret patterns',()=>{
     const findings=detectText(`API_KEY=sk-${'A'.repeat(20)}`).filter(finding=>finding.type==='API Key');
     expect(findings).toHaveLength(1);
   });
+  it('does not reveal any original characters for credential values shorter than twelve',()=>{
+    for(const value of ['ABCDEF','ABCDEFGHIJK'])expect(mask('API Token',value)).not.toContain(value);
+    expect(mask('API Token','ABCDEF')).toBe('••••••');
+    expect(mask('API Token','ABCDEFGHIJKL')).toBe('AB••••KL');
+  });
 });
