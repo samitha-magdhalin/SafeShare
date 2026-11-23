@@ -29,6 +29,7 @@
     "postinstall": "node scripts/copy-ocr.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "vitest run src/eval"
   }
 }
