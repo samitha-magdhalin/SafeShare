@@ -15,12 +15,13 @@ describe('Vercel SPA routing',()=>{
     const routeHeaders=config.headers.find(entry=>entry.source==='/(.*)')?.headers??[];
     const headers=Object.fromEntries(routeHeaders.map(header=>[header.key,header.value]));
     expect(headers['Content-Security-Policy']).toContain("default-src 'self'");
-    expect(headers['Content-Security-Policy']).toBe("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    expect(headers['Content-Security-Policy']).toBe("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://ftzckoiarbzsszlrjthx.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
     expect(headers['Referrer-Policy']).toBe('no-referrer');
     expect(headers['X-Content-Type-Options']).toBe('nosniff');
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=()');
     const connectSrc=headers['Content-Security-Policy'].match(/(?:^|;\s*)connect-src\s+([^;]+)/)?.[1];
-    expect(connectSrc).toBe("'self' https://supabase.co");
+    expect(connectSrc).toBe("'self' https://ftzckoiarbzsszlrjthx.supabase.co");
     expect(connectSrc).not.toContain('*');
+    expect(connectSrc).not.toContain('https://supabase.co');
   });
 });
