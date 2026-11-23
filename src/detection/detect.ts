@@ -1,4 +1,5 @@
 import type { Box, Finding, Severity, Word } from '../types';
+import { verhoeffValid } from './verhoeff';
 
 export function isPrivateIp(ip:string):boolean {
   const n=ip.split('.').map(Number);
@@ -7,6 +8,9 @@ export function isPrivateIp(ip:string):boolean {
 export function mask(type:string,value:string):string {
   if(type==='Email'){const [name,domain]=value.split('@');return `${name[0]}***@${domain}`;}
   if(type==='Phone')return `••••••${value.replace(/\D/g,'').slice(-4)}`;
+  if(type==='Aadhaar')return `••••••••${value.replace(/\D/g,'').slice(-4)}`;
+  if(type==='PAN')return '••••••••••';
+  if(type==='UPI ID')return `••••@${value.split('@').pop()}`;
   if(type==='Database Connection String')return `${value.split(':')[0]}://••••`;
   if(['API Key','API Token','Access Token','Bearer Token','Password','AWS Access Key','AWS Secret Access Key','Secret','Generic Credential'].includes(type))return `${value.slice(0,Math.min(4,value.length))}••••${value.slice(-2)}`;
   if(type==='Internal IP')return value.replace(/\.\d+$/,'.•••');
@@ -26,6 +30,10 @@ const secretRe=new RegExp(`\\b(${secretKeys})(\\s*[:=]\\s*|\\s+)["']?([^\\s"']{2
 const databaseRe=/\b(?:postgresql|postgres|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s<>"']+/gi;
 const urlRe=/\bhttps?:\/\/[^\s<>"']+/gi;
 const emailRe=/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const upiProviders='ybl|ibl|axl|oksbi|okaxis|okhdfcbank|okicici|paytm|apl|upi|sbi|icici|hdfcbank|axisbank';
+const upiRe=new RegExp(`\\b[A-Z0-9._-]{2,256}@(?:${upiProviders})\\b`,'gi');
+const aadhaarRe=/(?<!\d)([2-9]\d{3}(?:([ -])\d{4}\2\d{4}|\d{8}))(?!\d)/g;
+const panRe=/\b[A-Z]{3}[ABCFGHLJPT][A-Z]\d{4}[A-Z]\b/g;
 const phoneRe=/(?:\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}\b/g;
 const ipRe=/\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 const bearerRe=/\b(?:Authorization\s*:\s*)?Bearer\s+([A-Za-z0-9._~+/-]{6,})/gi;
@@ -161,16 +169,20 @@ export function boxForSpan(start:number,end:number,words:Array<Word&{start:numbe
 export function detectText(text:string,words:Word[]=[]):Finding[]{
   let cursor=0;const spans=words.map(word=>{const at=text.indexOf(word.text,cursor),start=at<0?cursor:at;cursor=start+word.text.length;return{...word,start,end:cursor};});
   const found:Match[]=[];
-  for(const re of [secretRe,bearerRe,databaseRe,urlRe,emailRe,phoneRe,ipRe])re.lastIndex=0;
+  for(const re of [secretRe,bearerRe,databaseRe,urlRe,upiRe,emailRe,aadhaarRe,panRe,phoneRe,ipRe])re.lastIndex=0;
   let m:RegExpExecArray|null;
   while((m=secretRe.exec(text))){const key=m[1],delimiter=m[2],start=m.index+m[0].lastIndexOf(m[3]),value=credentialValue(m[3],start,spans);if(!validCredential(value,delimiter))continue;const type=credentialType(key),end=start+value.length,boxEnd=credentialProtectionEnd(start,end,spans);add(found,{type,category:'secret',severity:'CRITICAL',value,boxStart:start,boxEnd,description:type==='Database Connection String'?'Database connection string with potential credentials.':'Potential credential assignment visible.'},start,end);}
   while((m=bearerRe.exec(text))){const value=m[1],start=m.index+m[0].lastIndexOf(value);add(found,{type:'Bearer Token',category:'secret',severity:'CRITICAL',value,description:'Authorization bearer token visible.'},start,start+value.length);}
   while((m=databaseRe.exec(text))){const value=m[0].replace(/[),.;]+$/,''),assigned=found.some(f=>f.start<=m!.index&&f.end>=m!.index+value.length&&f.category==='secret');if(assigned)continue;const embedded=/^[a-z+]+:\/\/[^/@\s]+:[^/@\s]+@/i.test(value);add(found,{type:'Database Connection String',category:'secret',severity:embedded?'CRITICAL':'REVIEW',value,description:embedded?'Database connection string with embedded credentials.':'Database connection string needs review.'},m.index,m.index+value.length);}
   while((m=urlRe.exec(text))){const value=m[0].replace(/[),.;]+$/,'');try{const url=new URL(value),host=url.hostname,credential=Boolean(url.username||url.password),internal=host==='localhost'||host.endsWith('.local')||host.endsWith('.internal')||isPrivateIp(host);add(found,{type:credential?'Credential-bearing URL':internal?'Internal URL':'Public URL',category:credential?'secret':'network',severity:credential?'CRITICAL':internal?'SENSITIVE':'INFO',value,description:credential?'URL contains embedded credentials.':internal?'Internal destination visible.':'Public website URL visible.'},m.index,m.index+value.length);}catch{/* malformed URL is not a finding */}}
+  while((m=upiRe.exec(text)))add(found,{type:'UPI ID',category:'personal',severity:'SENSITIVE',value:m[0],description:'UPI identifier visible in the image.'},m.index,m.index+m[0].length);
   if(spans.length)found.push(...reconstructedEmails(spans));else while((m=emailRe.exec(text)))add(found,{type:'Email',category:'personal',severity:'SENSITIVE',value:m[0],description:'Email address visible in the image.'},m.index,m.index+m[0].length);
+  for(let index=found.length-1;index>=0;index--)if(found[index].type==='Email'&&found.some(other=>other.type==='UPI ID'&&other.start<found[index].end&&other.end>found[index].start))found.splice(index,1);
+  while((m=aadhaarRe.exec(text))){const value=m[1],digits=value.replace(/\D/g,'');if(verhoeffValid(digits))add(found,{type:'Aadhaar',category:'personal',severity:'CRITICAL',value,description:'Aadhaar number visible in the image.'},m.index,m.index+value.length);}
+  while((m=panRe.exec(text)))add(found,{type:'PAN',category:'personal',severity:'CRITICAL',value:m[0],description:'PAN identifier visible in the image.'},m.index,m.index+m[0].length);
   while((m=phoneRe.exec(text))){if(/\d/.test(text[m.index-1]||''))continue;add(found,{type:'Phone',category:'personal',severity:'SENSITIVE',value:m[0],description:'Indian mobile number visible in the image.'},m.index,m.index+m[0].length);}
   while((m=ipRe.exec(text))){if(m[0].split('.').some(part=>Number(part)>255))continue;const internal=isPrivateIp(m[0]);add(found,{type:internal?'Internal IP':'Public IP',category:'network',severity:internal?'SENSITIVE':'INFO',value:m[0],description:internal?'Private or local network address visible.':'Public IP address visible.'},m.index,m.index+m[0].length);}
-  const priority=(f:Match)=>f.category==='secret'?3:f.type==='Internal URL'?2:1;
+  const priority=(f:Match)=>f.category==='secret'||f.type==='Aadhaar'||f.type==='PAN'?3:f.type==='UPI ID'||f.type==='Internal URL'?2:1;
   const sorted=found.sort((a,b)=>a.start-b.start||priority(b)-priority(a)||b.end-a.end);
   const deduped=sorted.filter((f,i)=>!sorted.some((other,j)=>j!==i&&other.start<=f.start&&other.end>=f.end&&(priority(other)>priority(f)||(priority(other)===priority(f)&&j<i))));
   return deduped.map((f,index)=>{const boxStart=f.boxStart??f.start,boxEnd=f.boxEnd??f.end,matching=spans.filter(word=>word.end>boxStart&&word.start<boxEnd);return{id:`text-${index}`,type:f.type,category:f.category,severity:f.severity,confidence:Math.round(matching.length?matching.reduce((sum,word)=>sum+word.confidence,0)/matching.length:75),box:boxForSpan(boxStart,boxEnd,spans),maskedPreview:mask(f.type,f.value),source:'ocr',description:f.description,selected:f.severity==='CRITICAL'||f.severity==='SENSITIVE',fingerprint:`${f.type}:${fingerprint(f.value)}`};});
