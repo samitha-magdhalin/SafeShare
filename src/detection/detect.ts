@@ -29,6 +29,14 @@ const secretKeys='AWS\\s*[_-]?\\s*SECRET\\s*[_-]?\\s*ACCESS\\s*[_-]?\\s*KEY|AWS\
 const secretRe=new RegExp(`\\b(${secretKeys})(\\s*[:=]\\s*|\\s+)["']?([^\\s"']{2,}(?:\\s+[A-Za-z0-9._~+/-]{2,})*)`,'gi');
 const databaseRe=/\b(?:postgresql|postgres|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s<>"']+/gi;
 const urlRe=/\bhttps?:\/\/[^\s<>"']+/gi;
+const standaloneSecretPatterns=[
+  {re:/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,type:'AWS Access Key'},
+  {re:/\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b/g,type:'API Token'},
+  {re:/\bsk-[A-Za-z0-9_-]{20,}\b/g,type:'API Key'},
+  {re:/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,type:'API Token'},
+  {re:/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,type:'Access Token'},
+  {re:/-----BEGIN [A-Z ]*PRIVATE KEY-----/g,type:'Secret'}
+];
 const emailRe=/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const upiProviders='ybl|ibl|axl|oksbi|okaxis|okhdfcbank|okicici|paytm|apl|upi|sbi|icici|hdfcbank|axisbank';
 const upiRe=new RegExp(`\\b[A-Z0-9._-]{2,256}@(?:${upiProviders})\\b`,'gi');
@@ -169,9 +177,10 @@ export function boxForSpan(start:number,end:number,words:Array<Word&{start:numbe
 export function detectText(text:string,words:Word[]=[]):Finding[]{
   let cursor=0;const spans=words.map(word=>{const at=text.indexOf(word.text,cursor),start=at<0?cursor:at;cursor=start+word.text.length;return{...word,start,end:cursor};});
   const found:Match[]=[];
-  for(const re of [secretRe,bearerRe,databaseRe,urlRe,upiRe,emailRe,aadhaarRe,panRe,phoneRe,ipRe])re.lastIndex=0;
+  for(const re of [secretRe,bearerRe,databaseRe,urlRe,upiRe,emailRe,aadhaarRe,panRe,phoneRe,ipRe,...standaloneSecretPatterns.map(pattern=>pattern.re)])re.lastIndex=0;
   let m:RegExpExecArray|null;
   while((m=secretRe.exec(text))){const key=m[1],delimiter=m[2],start=m.index+m[0].lastIndexOf(m[3]),value=credentialValue(m[3],start,spans);if(!validCredential(value,delimiter))continue;const type=credentialType(key),end=start+value.length,boxEnd=credentialProtectionEnd(start,end,spans);add(found,{type,category:'secret',severity:'CRITICAL',value,boxStart:start,boxEnd,description:type==='Database Connection String'?'Database connection string with potential credentials.':'Potential credential assignment visible.'},start,end);}
+  for(const pattern of standaloneSecretPatterns){while((m=pattern.re.exec(text)))add(found,{type:pattern.type,category:'secret',severity:'CRITICAL',value:m[0],description:'Credential-like secret value visible.'},m.index,m.index+m[0].length);}
   while((m=bearerRe.exec(text))){const value=m[1],start=m.index+m[0].lastIndexOf(value);add(found,{type:'Bearer Token',category:'secret',severity:'CRITICAL',value,description:'Authorization bearer token visible.'},start,start+value.length);}
   while((m=databaseRe.exec(text))){const value=m[0].replace(/[),.;]+$/,''),assigned=found.some(f=>f.start<=m!.index&&f.end>=m!.index+value.length&&f.category==='secret');if(assigned)continue;const embedded=/^[a-z+]+:\/\/[^/@\s]+:[^/@\s]+@/i.test(value);add(found,{type:'Database Connection String',category:'secret',severity:embedded?'CRITICAL':'REVIEW',value,description:embedded?'Database connection string with embedded credentials.':'Database connection string needs review.'},m.index,m.index+value.length);}
   while((m=urlRe.exec(text))){const value=m[0].replace(/[),.;]+$/,'');try{const url=new URL(value),host=url.hostname,credential=Boolean(url.username||url.password),internal=host==='localhost'||host.endsWith('.local')||host.endsWith('.internal')||isPrivateIp(host);add(found,{type:credential?'Credential-bearing URL':internal?'Internal URL':'Public URL',category:credential?'secret':'network',severity:credential?'CRITICAL':internal?'SENSITIVE':'INFO',value,description:credential?'URL contains embedded credentials.':internal?'Internal destination visible.':'Public website URL visible.'},m.index,m.index+value.length);}catch{/* malformed URL is not a finding */}}

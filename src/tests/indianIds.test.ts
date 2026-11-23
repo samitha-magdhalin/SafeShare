@@ -41,3 +41,33 @@ describe('Indian identifiers',()=>{
     expect(finding?.box).toBeDefined();
   });
 });
+
+describe('standalone secret patterns',()=>{
+  const cases=[
+    ['AKIA1234567890ABCDEF','AWS Access Key'],
+    [`ghp_${'A'.repeat(36)}`,'API Token'],
+    [`github_pat_${'A'.repeat(50)}`,'API Token'],
+    [`sk-${'A'.repeat(20)}`,'API Key'],
+    [`xoxb-${'A'.repeat(10)}`,'API Token'],
+    ['eyJabcdefgh.abcdefgh.abcdefgh','Access Token'],
+    ['-----BEGIN RSA PRIVATE KEY-----','Secret']
+  ];
+  it.each(cases)('detects %s as a critical standalone secret', (value,type)=>{
+    const finding=detectText(value).find(candidate=>candidate.type===type);
+    expect(finding?.severity).toBe('CRITICAL');
+  });
+  it.each([
+    ['AKIA1234567890ABCDE','AWS Access Key'],
+    ['ghp_short','API Token'],
+    ['sk-short','API Key'],
+    ['xoxb-short','API Token'],
+    ['eyJshort.abcdefgh.abcdefgh','Access Token'],
+    ['-----BEGIN PUBLIC KEY-----','Secret']
+  ])('does not detect malformed %s as %s', (value,type)=>{
+    expect(detectText(value)).not.toContainEqual(expect.objectContaining({type}));
+  });
+  it('does not duplicate a keyword-matched token value',()=>{
+    const findings=detectText(`API_KEY=sk-${'A'.repeat(20)}`).filter(finding=>finding.type==='API Key');
+    expect(findings).toHaveLength(1);
+  });
+});
